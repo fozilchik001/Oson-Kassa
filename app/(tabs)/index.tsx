@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
@@ -21,6 +22,7 @@ const IS_DESKTOP = width > 768;
 
 export default function PosScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [activePage, setActivePage] = useState('Sotuv');
   
   // Sotuv page state
@@ -771,6 +773,8 @@ export default function PosScreen() {
           <NavItem icon="people-outline" label="Qarzdorlar" active={activePage === 'Qarzdorlar'} onPress={() => setActivePage('Qarzdorlar')} />
           <NavItem icon="wallet-outline" label="Xarajatlar" active={activePage === 'Xarajatlar'} onPress={() => setActivePage('Xarajatlar')} />
           <NavItem icon="settings-outline" label="Sozlamalar" active={activePage === 'Sozlamalar'} onPress={() => setActivePage('Sozlamalar')} />
+          <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10, marginHorizontal: 20 }} />
+          <NavItem icon="shield-checkmark-outline" label="Admin Panel" onPress={() => router.push('/admin')} />
         </View>
 
         <TouchableOpacity style={styles.logoutBtn}>
