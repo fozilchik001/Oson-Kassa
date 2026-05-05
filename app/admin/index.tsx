@@ -15,7 +15,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { PRODUCTS } from '@/constants/PosData';
+import { PRODUCTS as INITIAL_PRODUCTS } from '@/constants/PosData';
 
 const { width } = Dimensions.get('window');
 const IS_DESKTOP = width > 1024;
@@ -23,7 +23,7 @@ const IS_DESKTOP = width > 1024;
 export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Overview');
+  const [activeTab, setActiveTab] = useState('Hisobotlar');
 
   // Staff state
   const [staff, setStaff] = useState([
@@ -32,6 +32,168 @@ export default function AdminDashboard() {
     { id: 3, name: 'Bobur Mirzo', role: 'Admin', phone: '+998 97 111 22 33', status: 'Faol' },
   ]);
 
+  // Add Staff Modal state
+  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
+  const [staffName, setStaffName] = useState('');
+  const [staffRole, setStaffRole] = useState('Kassir');
+  const [staffPhone, setStaffPhone] = useState('');
+  const [editingStaffId, setEditingStaffId] = useState<number | null>(null);
+
+  const handleSaveStaff = () => {
+    if (!staffName.trim() || !staffPhone.trim()) return;
+    
+    if (editingStaffId) {
+      setStaff(prev => prev.map(s => s.id === editingStaffId ? {
+        ...s,
+        name: staffName.trim(),
+        role: staffRole,
+        phone: staffPhone.trim()
+      } : s));
+    } else {
+      const newPerson = {
+        id: Date.now(),
+        name: staffName.trim(),
+        role: staffRole,
+        phone: staffPhone.trim(),
+        status: 'Faol',
+      };
+      setStaff(prev => [...prev, newPerson]);
+    }
+
+    resetStaffForm();
+  };
+
+  const resetStaffForm = () => {
+    setStaffName('');
+    setStaffPhone('');
+    setStaffRole('Kassir');
+    setEditingStaffId(null);
+    setShowAddStaffModal(false);
+  };
+
+  const handleEditStaffClick = (person: any) => {
+    setEditingStaffId(person.id);
+    setStaffName(person.name);
+    setStaffRole(person.role);
+    setStaffPhone(person.phone);
+    setShowAddStaffModal(true);
+  };
+
+  const handleDeleteStaff = (id: number) => {
+    setStaff(prev => prev.filter(s => s.id !== id));
+  };
+
+  // Inventory state
+  const [inventory, setInventory] = useState(INITIAL_PRODUCTS);
+  const [showAddProdModal, setShowAddProdModal] = useState(false);
+  const [prodName, setProdName] = useState('');
+  const [prodCategory, setProdCategory] = useState('Ichimliklar');
+  const [prodPrice, setProdPrice] = useState('');
+  const [prodStock, setProdStock] = useState('');
+  const [prodCode, setProdCode] = useState('');
+  const [editingProdId, setEditingProdId] = useState<string | null>(null);
+
+  const handleSaveProduct = () => {
+    if (!prodName.trim() || !prodPrice.trim() || !prodStock.trim()) return;
+    
+    if (editingProdId) {
+      setInventory(prev => prev.map(p => p.id === editingProdId ? {
+        ...p,
+        name: prodName.trim(),
+        category: prodCategory,
+        price: parseInt(prodPrice, 10),
+        stock: parseInt(prodStock, 10),
+        code: prodCode.trim()
+      } : p));
+    } else {
+      const newProd = {
+        id: Date.now().toString(),
+        name: prodName.trim(),
+        category: prodCategory,
+        price: parseInt(prodPrice, 10),
+        stock: parseInt(prodStock, 10),
+        code: prodCode.trim() || Math.floor(Math.random() * 1000000000).toString(),
+        image: 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
+      };
+      setInventory(prev => [newProd, ...prev]);
+    }
+    resetProdForm();
+  };
+
+  const resetProdForm = () => {
+    setProdName('');
+    setProdPrice('');
+    setProdStock('');
+    setProdCode('');
+    setProdCategory('Ichimliklar');
+    setEditingProdId(null);
+    setShowAddProdModal(false);
+  };
+
+  const handleEditProdClick = (p: any) => {
+    setEditingProdId(p.id);
+    setProdName(p.name);
+    setProdCategory(p.category);
+    setProdPrice(p.price.toString());
+    setProdStock(p.stock.toString());
+    setProdCode(p.code);
+    setShowAddProdModal(true);
+  };
+
+  const handleDeleteProd = (id: string) => {
+    setInventory(prev => prev.filter(p => p.id !== id));
+  };
+
+  // Expenses state
+  const [showAddExpModal, setShowAddExpModal] = useState(false);
+  const [expTitle, setExpTitle] = useState('');
+  const [expAmount, setExpAmount] = useState('');
+  const [expCategory, setExpCategory] = useState('Boshqa');
+  const [editingExpId, setEditingExpId] = useState<number | null>(null);
+
+  const handleSaveExpense = () => {
+    if (!expTitle.trim() || !expAmount.trim()) return;
+    
+    if (editingExpId) {
+      setExpenses(prev => prev.map(e => e.id === editingExpId ? {
+        ...e,
+        title: expTitle.trim(),
+        amount: parseInt(expAmount, 10),
+        category: expCategory
+      } : e));
+    } else {
+      const newExp = {
+        id: Date.now(),
+        title: expTitle.trim(),
+        amount: parseInt(expAmount, 10),
+        date: new Date().toLocaleDateString('uz-UZ').split('.').join('.'),
+        category: expCategory,
+      };
+      setExpenses(prev => [newExp, ...prev]);
+    }
+    resetExpForm();
+  };
+
+  const resetExpForm = () => {
+    setExpTitle('');
+    setExpAmount('');
+    setExpCategory('Boshqa');
+    setEditingExpId(null);
+    setShowAddExpModal(false);
+  };
+
+  const handleEditExpClick = (e: any) => {
+    setEditingExpId(e.id);
+    setExpTitle(e.title);
+    setExpAmount(e.amount.toString());
+    setExpCategory(e.category);
+    setShowAddExpModal(true);
+  };
+
+  const handleDeleteExp = (id: number) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+  };
+
   // Expenses state
   const [expenses, setExpenses] = useState([
     { id: 1, title: 'Ijara haqi', amount: 2500000, date: '01.05.2026', category: 'Ijara' },
@@ -39,24 +201,51 @@ export default function AdminDashboard() {
     { id: 3, title: 'Tushlik (Xodimlar)', amount: 120000, date: '04.05.2026', category: 'Oziq-ovqat' },
   ]);
 
-  const stats = [
-    { id: 1, label: "Bugungi savdo", value: "4,250,000 so'm", icon: "cash-outline", color: "#E31E24", trend: "+12%" },
-    { id: 2, label: "Buyurtmalar", value: "42 ta", icon: "cart-outline", color: "#E31E24", trend: "+5%" },
-    { id: 3, label: "Mijozlar", value: "12 ta", icon: "people-outline", color: "#E31E24", trend: "+2" },
-    { id: 4, label: "Foyda", value: "850,000 so'm", icon: "trending-up-outline", color: "#28A745", trend: "+8%" },
-  ];
+  const [transactions, setTransactions] = useState([
+    { id: '1', customer: 'Aliyev Vali', amount: 120000, status: 'Muvaffaqiyatli', time: '10:45', method: 'Naqd' },
+    { id: '2', customer: 'Rustamov Jasur', amount: 45000, status: 'Kutilmoqda', time: '10:30', method: 'Karta' },
+    { id: '3', customer: 'Karimova Malika', amount: 210000, status: 'Muvaffaqiyatli', time: '10:15', method: 'Naqd' },
+    { id: '4', customer: 'Xolmatov Aziz', amount: 8000, status: 'Bekor qilingan', time: '09:50', method: 'Karta' },
+  ]);
 
-  const recentTransactions = [
-    { id: '1', customer: 'Aliyev Vali', amount: '120,000', status: 'Muvaffaqiyatli', time: '10:45', method: 'Naqd' },
-    { id: '2', customer: 'Rustamov Jasur', amount: '45,000', status: 'Kutilmoqda', time: '10:30', method: 'Karta' },
-    { id: '3', customer: 'Karimova Malika', amount: '210,000', status: 'Muvaffaqiyatli', time: '10:15', method: 'Naqd' },
-    { id: '4', customer: 'Xolmatov Aziz', amount: '8,000', status: 'Bekor qilingan', time: '09:50', method: 'Karta' },
-  ];
+  const [salesItems, setSalesItems] = useState([
+    { id: 1, name: 'Coca Cola 1.5L', quantity: 24, total: 240000, category: 'Ichimliklar' },
+    { id: 2, name: 'Chortoq 0.5L', quantity: 15, total: 75000, category: 'Ichimliklar' },
+    { id: 3, name: 'Lays Chips 80g', quantity: 42, total: 420000, category: 'Snaklar' },
+    { id: 4, name: 'Orbit White', quantity: 30, total: 90000, category: 'Snaklar' },
+  ]);
+
+  const [chartPeriod, setChartPeriod] = useState('Haftalik');
+
+  const dynamicStats = useMemo(() => {
+    const totalSales = transactions.reduce((sum, t) => sum + t.amount, 0);
+    const totalOrders = transactions.length;
+    const profit = Math.floor(totalSales * 0.2); // 20% margin
+    const uniqueCustomers = new Set(transactions.map(t => t.customer)).size;
+
+    return [
+      { id: 1, label: "Bugungi savdo", value: `${totalSales.toLocaleString()} so'm`, icon: "cash-outline", color: "#E31E24", trend: "+12%" },
+      { id: 2, label: "Buyurtmalar", value: `${totalOrders} ta`, icon: "cart-outline", color: "#E31E24", trend: "+5%" },
+      { id: 3, label: "Mijozlar", value: `${uniqueCustomers} ta`, icon: "people-outline", color: "#E31E24", trend: "+2" },
+      { id: 4, label: "Foyda", value: `${profit.toLocaleString()} so'm`, icon: "trending-up-outline", color: "#28A745", trend: "+8%" },
+    ];
+  }, [transactions]);
+
+  const chartData = useMemo(() => {
+    const data: Record<string, number[]> = {
+      'Kunlik': [20, 45, 28, 80, 99, 43, 50, 60, 30, 20, 10, 5],
+      'Haftalik': [40, 70, 45, 90, 65, 80, 50],
+      'Oylik': [30, 40, 50, 60, 70, 80, 90, 85, 75, 65, 55, 45]
+    };
+    return data[chartPeriod] || data['Haftalik'];
+  }, [chartPeriod]);
+
+
 
   const renderOverview = () => (
     <>
       <View style={styles.statsGrid}>
-        {stats.map((stat) => (
+        {dynamicStats.map((stat) => (
           <View key={stat.id} style={styles.statCard}>
             <View style={[styles.statIconContainer, { backgroundColor: stat.color + '10' }]}>
               <Ionicons name={stat.icon as any} size={28} color={stat.color} />
@@ -77,17 +266,27 @@ export default function AdminDashboard() {
         <View style={[styles.card, styles.chartCard]}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Savdo dinamikasi</Text>
-            <TouchableOpacity style={styles.cardAction}>
-              <Text style={styles.cardActionText}>Haftalik</Text>
+            <TouchableOpacity 
+              style={styles.cardAction}
+              onPress={() => {
+                const next: Record<string, string> = { 'Kunlik': 'Haftalik', 'Haftalik': 'Oylik', 'Oylik': 'Kunlik' };
+                setChartPeriod(prev => next[prev]);
+              }}
+            >
+              <Text style={styles.cardActionText}>{chartPeriod}</Text>
               <Ionicons name="chevron-down" size={14} color="#E31E24" />
             </TouchableOpacity>
           </View>
           <View style={styles.chartPlaceholder}>
             <View style={styles.chartBars}>
-               {[40, 70, 45, 90, 65, 80, 50].map((h, i) => (
+               {chartData.map((h, i) => (
                  <View key={i} style={styles.chartBarGroup}>
-                    <View style={[styles.chartBar, { height: h + '%', backgroundColor: i === 3 ? '#E31E24' : '#FEEBEB' }]} />
-                    <Text style={styles.chartDay}>{['Du', 'Se', 'Cho', 'Pa', 'Ju', 'Sha', 'Ya'][i]}</Text>
+                    <View style={[styles.chartBar, { height: h + '%', backgroundColor: i === chartData.length - 1 ? '#E31E24' : '#FEEBEB' }]} />
+                    <Text style={styles.chartDay}>
+                      {chartPeriod === 'Kunlik' ? `${i*2}:00` : 
+                       chartPeriod === 'Oylik' ? `${i+1}` :
+                       ['Du', 'Se', 'Cho', 'Pa', 'Ju', 'Sha', 'Ya'][i]}
+                    </Text>
                  </View>
                ))}
             </View>
@@ -102,7 +301,7 @@ export default function AdminDashboard() {
             </TouchableOpacity>
           </View>
           <View style={styles.transactionList}>
-            {recentTransactions.map((item) => (
+            {transactions.map((item) => (
               <View key={item.id} style={styles.transactionItem}>
                 <View style={styles.transactionAvatar}>
                   <Text style={styles.transactionAvatarText}>{item.customer.charAt(0)}</Text>
@@ -112,7 +311,7 @@ export default function AdminDashboard() {
                   <Text style={styles.transactionTime}>{item.time}</Text>
                 </View>
                 <View style={styles.transactionPrice}>
-                  <Text style={styles.transactionAmount}>{item.amount} so'm</Text>
+                  <Text style={styles.transactionAmount}>{item.amount.toLocaleString()} so'm</Text>
                   <View style={[
                     styles.statusBadge, 
                     { backgroundColor: item.status === 'Muvaffaqiyatli' ? '#E8F5E9' : item.status === 'Kutilmoqda' ? '#FFF3E0' : '#FFEBEE' }
@@ -132,12 +331,34 @@ export default function AdminDashboard() {
       </View>
 
       <View style={styles.quickActions}>
+        <Text style={styles.sectionTitle}>Sotilgan mahsulotlar hisoboti</Text>
+        <View style={styles.card}>
+          <View style={styles.tableHeader}>
+            <Text style={[styles.th, { flex: 2 }]}>Mahsulot nomi</Text>
+            <Text style={[styles.th, { flex: 1 }]}>Kategoriya</Text>
+            <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>Soni</Text>
+            <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Umumiy summa</Text>
+          </View>
+          {salesItems.map(item => (
+            <View key={item.id} style={styles.tr}>
+              <Text style={[styles.td, { flex: 2, fontWeight: '600' }]}>{item.name}</Text>
+              <Text style={[styles.td, { flex: 1 }]}>{item.category}</Text>
+              <Text style={[styles.td, { flex: 1, textAlign: 'center' }]}>{item.quantity} ta</Text>
+              <Text style={[styles.td, { flex: 1, textAlign: 'right', fontWeight: 'bold', color: '#28A745' }]}>
+                {item.total.toLocaleString()} so'm
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      <View style={styles.quickActions}>
         <Text style={styles.sectionTitle}>Tezkor amallar</Text>
         <View style={styles.actionGrid}>
-           <QuickAction icon="add-circle-outline" label="Mahsulot qo'shish" color="#E31E24" />
-           <QuickAction icon="person-add-outline" label="Sotuvchi qo'shish" color="#E31E24" />
-           <QuickAction icon="print-outline" label="Hisobot chiqarish" color="#E31E24" />
-           <QuickAction icon="settings-outline" label="Tizim sozlamalari" color="#E31E24" />
+           <QuickAction icon="add-circle-outline" label="Mahsulot qo'shish" color="#E31E24" onPress={() => setActiveTab('Inventory')} />
+           <QuickAction icon="person-add-outline" label="Sotuvchi qo'shish" color="#E31E24" onPress={() => setActiveTab('Staff')} />
+           <QuickAction icon="print-outline" label="Hisobot chiqarish" color="#E31E24" onPress={() => alert('Hisobot Excel formatida yuklab olindi')} />
+           <QuickAction icon="settings-outline" label="Tizim sozlamalari" color="#E31E24" onPress={() => setActiveTab('Settings')} />
         </View>
       </View>
     </>
@@ -147,17 +368,79 @@ export default function AdminDashboard() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>Xodimlar ro'yxati</Text>
-        <TouchableOpacity style={styles.primaryBtn}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddStaffModal(true)}>
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={styles.primaryBtnText}>Yangi xodim</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Add Staff Modal */}
+      <Modal
+        visible={showAddStaffModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddStaffModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingStaffId ? 'Xodimni Tahrirlash' : 'Yangi Xodim Qo\'shish'}</Text>
+              <TouchableOpacity onPress={resetStaffForm}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>F.I.O *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Masalan: Sardor Amanov"
+              value={staffName}
+              onChangeText={setStaffName}
+            />
+
+            <Text style={styles.fieldLabel}>Lavozimi</Text>
+            <View style={styles.categoryPicker}>
+              {['Kassir', 'Admin', 'Menejer'].map(role => (
+                <TouchableOpacity
+                  key={role}
+                  style={[styles.catChip, staffRole === role && styles.catChipActive]}
+                  onPress={() => setStaffRole(role)}
+                >
+                  <Text style={[styles.catChipText, staffRole === role && styles.catChipTextActive]}>{role}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.fieldLabel}>Telefon raqami *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="+998 90 123 45 67"
+              value={staffPhone}
+              onChangeText={setStaffPhone}
+              keyboardType="phone-pad"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={resetStaffForm}>
+                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!staffName || !staffPhone) && styles.saveBtnDisabled]}
+                onPress={handleSaveStaff}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Saqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { flex: 2 }]}>F.I.O</Text>
         <Text style={[styles.th, { flex: 1 }]}>Lavozim</Text>
         <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
         <Text style={[styles.th, { flex: 1 }]}>Holat</Text>
-        <Text style={[styles.th, { flex: 0.5, textAlign: 'right' }]}>Amallar</Text>
+        <Text style={[styles.th, { flex: 0.8, textAlign: 'right' }]}>Amallar</Text>
       </View>
       {staff.map(person => (
         <View key={person.id} style={styles.tr}>
@@ -174,9 +457,14 @@ export default function AdminDashboard() {
               <Text style={[styles.badgeText, person.status === 'Faol' ? styles.badgeSuccessText : styles.badgeWarningText]}>{person.status}</Text>
             </View>
           </View>
-          <TouchableOpacity style={[styles.td, { flex: 0.5, alignItems: 'flex-end' }]}>
-            <Ionicons name="ellipsis-vertical" size={20} color="#999" />
-          </TouchableOpacity>
+          <View style={[styles.td, { flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 15 }]}>
+            <TouchableOpacity onPress={() => handleEditStaffClick(person)}>
+              <Ionicons name="pencil-outline" size={20} color="#007BFF" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDeleteStaff(person.id)}>
+              <Ionicons name="trash-outline" size={20} color="#E31E24" />
+            </TouchableOpacity>
+          </View>
         </View>
       ))}
     </View>
@@ -186,19 +474,115 @@ export default function AdminDashboard() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>Ombor qoldig'i</Text>
-        <View style={styles.searchBarSmall}>
-          <Ionicons name="search" size={16} color="#999" />
-          <TextInput placeholder="Mahsulot qidirish..." style={styles.searchInputSmall} />
+        <View style={styles.headerActionsSmall}>
+          <View style={styles.searchBarSmall}>
+            <Ionicons name="search" size={16} color="#999" />
+            <TextInput placeholder="Mahsulot qidirish..." style={styles.searchInputSmall} />
+          </View>
+          <TouchableOpacity style={styles.primaryBtnSmall} onPress={() => setShowAddProdModal(true)}>
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.primaryBtnTextSmall}>Yangi mahsulot</Text>
+          </TouchableOpacity>
         </View>
       </View>
+
+      {/* Add Product Modal */}
+      <Modal
+        visible={showAddProdModal}
+        transparent
+        animationType="fade"
+        onRequestClose={resetProdForm}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingProdId ? 'Mahsulotni Tahrirlash' : 'Yangi Mahsulot Qo\'shish'}</Text>
+              <TouchableOpacity onPress={resetProdForm}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Mahsulot nomi *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Masalan: Coca Cola 1.5L"
+              value={prodName}
+              onChangeText={setProdName}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 15 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Narxi (so'm) *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="10000"
+                  value={prodPrice}
+                  onChangeText={setProdPrice}
+                  keyboardType="numeric"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.fieldLabel}>Soni (miqdori) *</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="50"
+                  value={prodStock}
+                  onChangeText={setProdStock}
+                  keyboardType="numeric"
+                />
+              </View>
+            </View>
+
+            <Text style={styles.fieldLabel}>Shtrix kod</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="123456789"
+              value={prodCode}
+              onChangeText={setProdCode}
+            />
+
+            <Text style={styles.fieldLabel}>Kategoriya</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={true} 
+              style={{ marginBottom: 20 }}
+              contentContainerStyle={{ paddingRight: 30, paddingBottom: 5 }}
+            >
+              {['Ichimliklar', 'Taomlar', 'Snaklar', 'Muzqaymoq', 'Desertlar', 'Boshqa'].map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.catChip, prodCategory === cat && styles.catChipActive, { marginRight: 8 }]}
+                  onPress={() => setProdCategory(cat)}
+                >
+                  <Text style={[styles.catChipText, prodCategory === cat && styles.catChipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={resetProdForm}>
+                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!prodName || !prodPrice || !prodStock) && styles.saveBtnDisabled]}
+                onPress={handleSaveProduct}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Saqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { flex: 2 }]}>Mahsulot nomi</Text>
         <Text style={[styles.th, { flex: 1 }]}>Kategoriya</Text>
         <Text style={[styles.th, { flex: 1 }]}>Shtrix kod</Text>
         <Text style={[styles.th, { flex: 1 }]}>Narxi</Text>
-        <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Qoldiq</Text>
+        <Text style={[styles.th, { flex: 0.8, textAlign: 'center' }]}>Qoldiq</Text>
+        <Text style={[styles.th, { flex: 0.8, textAlign: 'right' }]}>Amallar</Text>
       </View>
-      {PRODUCTS.slice(0, 15).map(p => (
+      {inventory.map(p => (
         <View key={p.id} style={styles.tr}>
           <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
             <Image source={{ uri: p.image }} style={styles.tableImage} />
@@ -207,9 +591,17 @@ export default function AdminDashboard() {
           <Text style={[styles.td, { flex: 1 }]}>{p.category}</Text>
           <Text style={[styles.td, { flex: 1, color: '#666' }]}>{p.code}</Text>
           <Text style={[styles.td, { flex: 1 }]}>{p.price.toLocaleString()} so'm</Text>
-          <Text style={[styles.td, { flex: 1, textAlign: 'right', fontWeight: 'bold', color: p.stock < 10 ? '#E31E24' : '#28A745' }]}>
+          <Text style={[styles.td, { flex: 0.8, textAlign: 'center', fontWeight: 'bold', color: p.stock < 10 ? '#E31E24' : '#28A745' }]}>
             {p.stock} ta
           </Text>
+          <View style={[styles.td, { flex: 0.8, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }]}>
+            <TouchableOpacity onPress={() => handleEditProdClick(p)}>
+              <Ionicons name="pencil-outline" size={18} color="#007BFF" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDeleteProd(p.id)}>
+              <Ionicons name="trash-outline" size={18} color="#E31E24" />
+            </TouchableOpacity>
+          </View>
         </View>
       ))}
     </View>
@@ -219,16 +611,84 @@ export default function AdminDashboard() {
     <View style={styles.card}>
        <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>Xarajatlar ro'yxati</Text>
-        <TouchableOpacity style={styles.primaryBtn}>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddExpModal(true)}>
           <Ionicons name="add" size={20} color="#fff" />
           <Text style={styles.primaryBtnText}>Xarajat qo'shish</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Add Expense Modal */}
+      <Modal
+        visible={showAddExpModal}
+        transparent
+        animationType="fade"
+        onRequestClose={resetExpForm}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{editingExpId ? 'Xarajatni Tahrirlash' : 'Yangi Xarajat Qo\'shish'}</Text>
+              <TouchableOpacity onPress={resetExpForm}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Xarajat izohi *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Masalan: Ijara haqi"
+              value={expTitle}
+              onChangeText={setExpTitle}
+            />
+
+            <Text style={styles.fieldLabel}>Summa (so'm) *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="2500000"
+              value={expAmount}
+              onChangeText={setExpAmount}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.fieldLabel}>Kategoriya</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={true} 
+              style={{ marginBottom: 20 }}
+              contentContainerStyle={{ paddingRight: 30, paddingBottom: 5 }}
+            >
+              {['Ijara', 'Kommunal', 'Oziq-ovqat', 'Transport', 'Xizmatlar', 'Boshqa'].map(cat => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.catChip, expCategory === cat && styles.catChipActive, { marginRight: 8 }]}
+                  onPress={() => setExpCategory(cat)}
+                >
+                  <Text style={[styles.catChipText, expCategory === cat && styles.catChipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={resetExpForm}>
+                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!expTitle || !expAmount) && styles.saveBtnDisabled]}
+                onPress={handleSaveExpense}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Saqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { flex: 2 }]}>Izoh</Text>
         <Text style={[styles.th, { flex: 1 }]}>Kategoriya</Text>
         <Text style={[styles.th, { flex: 1 }]}>Sana</Text>
         <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Summa</Text>
+        <Text style={[styles.th, { flex: 0.6, textAlign: 'right' }]}>Amallar</Text>
       </View>
       {expenses.map(exp => (
         <View key={exp.id} style={styles.tr}>
@@ -238,6 +698,14 @@ export default function AdminDashboard() {
           <Text style={[styles.td, { flex: 1, textAlign: 'right', fontWeight: 'bold', color: '#E31E24' }]}>
             {exp.amount.toLocaleString()} so'm
           </Text>
+          <View style={[styles.td, { flex: 0.6, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }]}>
+            <TouchableOpacity onPress={() => handleEditExpClick(exp)}>
+              <Ionicons name="pencil-outline" size={18} color="#007BFF" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => handleDeleteExp(exp.id)}>
+              <Ionicons name="trash-outline" size={18} color="#E31E24" />
+            </TouchableOpacity>
+          </View>
         </View>
       ))}
     </View>
@@ -382,12 +850,10 @@ export default function AdminDashboard() {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'Overview': return renderOverview();
+      case 'Hisobotlar': return renderOverview();
       case 'Staff': return renderStaff();
       case 'Inventory': return renderInventory();
       case 'Expenses': return renderExpenses();
-      case 'Analytics': return renderAnalytics();
-      case 'Sales': return renderSales();
       case 'Settings':
         return (
           <View style={styles.card}>
@@ -424,16 +890,10 @@ export default function AdminDashboard() {
 
       <View style={styles.navContainer}>
         <SidebarItem 
-          icon="grid-outline" 
-          label="Asosiy panel" 
-          active={activeTab === 'Overview'} 
-          onPress={() => setActiveTab('Overview')} 
-        />
-        <SidebarItem 
-          icon="analytics-outline" 
-          label="Analitika" 
-          active={activeTab === 'Analytics'} 
-          onPress={() => setActiveTab('Analytics')} 
+          icon="bar-chart-outline" 
+          label="Hisobotlar" 
+          active={activeTab === 'Hisobotlar'} 
+          onPress={() => setActiveTab('Hisobotlar')} 
         />
         <SidebarItem 
           icon="people-outline" 
@@ -448,12 +908,7 @@ export default function AdminDashboard() {
           onPress={() => setActiveTab('Inventory')} 
         />
         <View style={styles.navDivider} />
-        <SidebarItem 
-          icon="document-text-outline" 
-          label="Savdo hisoboti" 
-          active={activeTab === 'Sales'} 
-          onPress={() => setActiveTab('Sales')} 
-        />
+
         <SidebarItem 
           icon="wallet-outline" 
           label="Xarajatlar" 
@@ -486,12 +941,10 @@ export default function AdminDashboard() {
         <View style={[styles.header, { paddingTop: Platform.OS === 'web' ? 20 : insets.top + 10 }]}>
           <View>
             <Text style={styles.greeting}>
-              {activeTab === 'Overview' ? 'Admin Dashboard' : 
+              {activeTab === 'Hisobotlar' ? 'Hisobotlar va Statistika' : 
                activeTab === 'Staff' ? 'Xodimlar' :
                activeTab === 'Inventory' ? 'Ombor' :
-               activeTab === 'Expenses' ? 'Xarajatlar' : 
-               activeTab === 'Sales' ? 'Savdo Hisoboti' : 
-               activeTab === 'Analytics' ? 'Analitika' : 'Sozlamalar'}
+               activeTab === 'Expenses' ? 'Xarajatlar' : 'Sozlamalar'}
             </Text>
             <Text style={styles.subGreeting}>Xush kelibsiz! Tizim holati bilan tanishing</Text>
           </View>
@@ -536,9 +989,9 @@ function SidebarItem({ icon, label, active = false, onPress = () => {} }: any) {
   );
 }
 
-function QuickAction({ icon, label, color }: any) {
+function QuickAction({ icon, label, color, onPress }: any) {
   return (
-    <TouchableOpacity style={styles.quickActionCard}>
+    <TouchableOpacity style={styles.quickActionCard} onPress={onPress}>
       <View style={[styles.quickActionIcon, { backgroundColor: color + '10' }]}>
         <Ionicons name={icon} size={24} color={color} />
       </View>
@@ -1239,5 +1692,130 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#333',
     fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalBox: {
+    width: Platform.OS === 'web' ? 450 : '100%',
+    backgroundColor: '#fff',
+    borderRadius: 24,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
+  modalInput: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#1A1A1A',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  categoryPicker: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  catChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  catChipActive: {
+    backgroundColor: '#E31E24',
+    borderColor: '#E31E24',
+  },
+  catChipText: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '600',
+  },
+  catChipTextActive: {
+    color: '#fff',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+  },
+  cancelBtnText: {
+    color: '#666',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  saveBtn: {
+    flex: 2,
+    flexDirection: 'row',
+    backgroundColor: '#E31E24',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  saveBtnDisabled: {
+    backgroundColor: '#FFEBEE',
+  },
+  saveBtnText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  headerActionsSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  primaryBtnSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E31E24',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  primaryBtnTextSmall: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
