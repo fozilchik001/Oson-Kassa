@@ -42,6 +42,57 @@ export default function PosScreen() {
   const [newBarcode, setNewBarcode] = useState('');
   const [newImage, setNewImage] = useState<string | null>(null);
 
+  // Debtors state
+  const [debtors, setDebtors] = useState([
+    { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
+    { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
+    { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
+  ]);
+
+  const [totalPaidAmount, setTotalPaidAmount] = useState(850000);
+
+  const handlePayDebt = (id: number) => {
+    const debtToPay = debtors.find(d => d.id === id);
+    if (debtToPay) {
+      setTotalPaidAmount(prev => prev + debtToPay.amount);
+    }
+    setDebtors(prev => prev.filter(d => d.id !== id));
+  };
+
+  // Add Debt Modal state
+  const [showAddDebtModal, setShowAddDebtModal] = useState(false);
+  const [debtorName, setDebtorName] = useState('');
+  const [debtorPhone, setDebtorPhone] = useState('');
+  const [debtAmount, setDebtAmount] = useState('');
+  const [debtDate, setDebtDate] = useState('');
+
+  const handleAddDebt = () => {
+    if (!debtorName.trim() || !debtAmount.trim() || !debtDate.trim()) return;
+    
+    // Check if overdue
+    const [day, month, year] = debtDate.split('.').map(Number);
+    const deadlineDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isOver = deadlineDate < today;
+
+    const newDebt = {
+      id: Date.now(),
+      name: debtorName.trim(),
+      phone: debtorPhone.trim(),
+      amount: parseInt(debtAmount.replace(/\D/g, ''), 10) || 0,
+      date: debtDate.trim(),
+      over: isOver,
+    };
+
+    setDebtors(prev => [...prev, newDebt]);
+    setDebtorName('');
+    setDebtorPhone('');
+    setDebtAmount('');
+    setDebtDate('');
+    setShowAddDebtModal(false);
+  };
+
   // File input ref for web image picking
   const fileInputRef = useRef<any>(null);
   const editFileInputRef = useRef<any>(null);
@@ -162,20 +213,7 @@ export default function PosScreen() {
             <View style={styles.mainContent}>
               <View style={styles.header}>
                 <Text style={styles.headerTitle}>Sotuv</Text>
-                <View style={styles.headerActions}>
-                  <TouchableOpacity style={styles.notificationBtn}>
-                    <Ionicons name="notifications-outline" size={24} color="#333" />
-                    <View style={styles.notifBadge} />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.profileBtn}>
-                    <Image
-                      source="https://ui-avatars.com/api/?name=Administrator&background=E31E24&color=fff"
-                      style={styles.avatar}
-                    />
-                    <Text style={styles.profileText}>Administrator</Text>
-                    <Ionicons name="chevron-down" size={16} color="#333" />
-                  </TouchableOpacity>
-                </View>
+
               </View>
 
               <View style={styles.controlsRow}>
@@ -252,14 +290,7 @@ export default function PosScreen() {
                 </View>
               </ScrollView>
 
-              <View style={styles.quickActions}>
-                <View style={styles.quickActionRow}>
-                  <QuickActionBtn icon="receipt-outline" label="Chek ochish" color="#fff" textColor="#E31E24" />
-                  <QuickActionBtn icon="arrow-undo-outline" label="Chek qaytarish" color="#fff" />
-                  <QuickActionBtn icon="wallet-outline" label="To'lov olish" color="#fff" />
-                  <QuickActionBtn icon="cash-outline" label="Naqd pul kiritish" color="#fff" />
-                </View>
-              </View>
+
             </View>
 
             <View style={styles.cartPanel}>
@@ -322,309 +353,84 @@ export default function PosScreen() {
             </View>
           </>
         );
-      case 'Mahsulotlar':
-        return (
-          <View style={styles.pageContent}>
-            {/* Add Product Modal */}
-            <Modal
-              visible={showAddModal}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setShowAddModal(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalBox}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Yangi Mahsulot</Text>
-                    <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                      <Ionicons name="close" size={24} color="#333" />
-                    </TouchableOpacity>
-                  </View>
 
-                  <Text style={styles.fieldLabel}>Mahsulot nomi *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Masalan: Coca Cola 1L"
-                    value={newName}
-                    onChangeText={setNewName}
-                  />
 
-                  <Text style={styles.fieldLabel}>Kategoriya *</Text>
-                  <View style={styles.categoryPicker}>
-                    {['Ichimliklar', 'Taomlar', 'Snaklar', 'Boshqalar'].map(cat => (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[styles.catChip, newCategory === cat && styles.catChipActive]}
-                        onPress={() => setNewCategory(cat)}
-                      >
-                        <Text style={[styles.catChipText, newCategory === cat && styles.catChipTextActive]}>{cat}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <View style={styles.modalRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.fieldLabel}>Narxi (so'm) *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="10000"
-                        value={newPrice}
-                        onChangeText={setNewPrice}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    <View style={{ width: 16 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.fieldLabel}>Qoldiq (ta) *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="50"
-                        value={newStock}
-                        onChangeText={setNewStock}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  </View>
-
-                  <Text style={styles.fieldLabel}>Shtrix Kod</Text>
-                  <View style={styles.barcodeInputWrapper}>
-                    <Ionicons name="barcode-outline" size={22} color="#999" />
-                    <TextInput
-                      style={styles.barcodeInput}
-                      placeholder="Skanerlang yoki qo'lda kiriting..."
-                      value={newBarcode}
-                      onChangeText={setNewBarcode}
-                      keyboardType="numeric"
-                    />
-                    <TouchableOpacity
-                      style={styles.barcodeGenBtn}
-                      onPress={() => setNewBarcode(String(Math.floor(Math.random() * 9000000000 + 1000000000)))}
-                    >
-                      <Ionicons name="refresh-outline" size={18} color="#E31E24" />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.fieldLabel}>Mahsulot Rasmi</Text>
-                  <TouchableOpacity
-                    style={styles.imagePicker}
-                    onPress={() => pickImage(setNewImage, fileInputRef)}
-                  >
-                    {newImage ? (
-                      <Image source={{ uri: newImage }} style={styles.imagePreview} contentFit="cover" />
-                    ) : (
-                      <View style={styles.imagePickerPlaceholder}>
-                        <Ionicons name="image-outline" size={32} color="#ccc" />
-                        <Text style={styles.imagePickerText}>Rasm yuklash</Text>
-                        <Text style={styles.imagePickerSub}>PNG, JPG, WEBP</Text>
-                      </View>
-                    )}
-                    {newImage && (
-                      <TouchableOpacity
-                        style={styles.imageRemoveBtn}
-                        onPress={(e) => { e.stopPropagation?.(); setNewImage(null); }}
-                      >
-                        <Ionicons name="close-circle" size={22} color="#E31E24" />
-                      </TouchableOpacity>
-                    )}
-                  </TouchableOpacity>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddModal(false)}>
-                      <Text style={styles.cancelBtnText}>Bekor qilish</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.saveBtn, (!newName || !newPrice || !newStock) && styles.saveBtnDisabled]}
-                      onPress={handleAddProduct}
-                    >
-                      <Ionicons name="checkmark" size={20} color="#fff" />
-                      <Text style={styles.saveBtnText}>Saqlash</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
-
-            {/* Edit Product Modal */}
-            <Modal
-              visible={showEditModal}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setShowEditModal(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalBox}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Mahsulotni Tahrirlash</Text>
-                    <TouchableOpacity onPress={() => setShowEditModal(false)}>
-                      <Ionicons name="close" size={24} color="#333" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={styles.fieldLabel}>Mahsulot nomi *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Masalan: Coca Cola 1L"
-                    value={editName}
-                    onChangeText={setEditName}
-                  />
-
-                  <Text style={styles.fieldLabel}>Kategoriya *</Text>
-                  <View style={styles.categoryPicker}>
-                    {['Ichimliklar', 'Taomlar', 'Snaklar', 'Boshqalar'].map(cat => (
-                      <TouchableOpacity
-                        key={cat}
-                        style={[styles.catChip, editCategory === cat && styles.catChipActive]}
-                        onPress={() => setEditCategory(cat)}
-                      >
-                        <Text style={[styles.catChipText, editCategory === cat && styles.catChipTextActive]}>{cat}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  <View style={styles.modalRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.fieldLabel}>Narxi (so'm) *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="10000"
-                        value={editPrice}
-                        onChangeText={setEditPrice}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                    <View style={{ width: 16 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.fieldLabel}>Qoldiq (ta) *</Text>
-                      <TextInput
-                        style={styles.modalInput}
-                        placeholder="50"
-                        value={editStock}
-                        onChangeText={setEditStock}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  </View>
-
-                  <Text style={styles.fieldLabel}>Shtrix Kod</Text>
-                  <View style={styles.barcodeInputWrapper}>
-                    <Ionicons name="barcode-outline" size={22} color="#999" />
-                    <TextInput
-                      style={styles.barcodeInput}
-                      placeholder="Skanerlang yoki qo'lda kiriting..."
-                      value={editBarcode}
-                      onChangeText={setEditBarcode}
-                      keyboardType="numeric"
-                    />
-                    <TouchableOpacity
-                      style={styles.barcodeGenBtn}
-                      onPress={() => setEditBarcode(String(Math.floor(Math.random() * 9000000000 + 1000000000)))}
-                    >
-                      <Ionicons name="refresh-outline" size={18} color="#E31E24" />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.fieldLabel}>Mahsulot Rasmi</Text>
-                  <TouchableOpacity
-                    style={styles.imagePicker}
-                    onPress={() => pickImage(setEditImage, editFileInputRef)}
-                  >
-                    {editImage ? (
-                      <Image source={{ uri: editImage }} style={styles.imagePreview} contentFit="cover" />
-                    ) : (
-                      <View style={styles.imagePickerPlaceholder}>
-                        <Ionicons name="image-outline" size={32} color="#ccc" />
-                        <Text style={styles.imagePickerText}>Rasm yuklash</Text>
-                        <Text style={styles.imagePickerSub}>PNG, JPG, WEBP</Text>
-                      </View>
-                    )}
-                    {editImage && (
-                      <TouchableOpacity
-                        style={styles.imageRemoveBtn}
-                        onPress={(e) => { e.stopPropagation?.(); setEditImage(null); }}
-                      >
-                        <Ionicons name="close-circle" size={22} color="#E31E24" />
-                      </TouchableOpacity>
-                    )}
-                  </TouchableOpacity>
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowEditModal(false)}>
-                      <Text style={styles.cancelBtnText}>Bekor qilish</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.saveBtn, (!editName || !editPrice || !editStock) && styles.saveBtnDisabled]}
-                      onPress={handleEditProduct}
-                    >
-                      <Ionicons name="checkmark" size={20} color="#fff" />
-                      <Text style={styles.saveBtnText}>Saqlash</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
-
-            <View style={styles.pageHeaderRow}>
-              <Text style={styles.pageTitle}>Mahsulotlar</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddModal(true)}>
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text style={styles.primaryBtnText}>Yangi qo'shish</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.card}>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.th, { flex: 2 }]}>Nomi</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Kategoriya</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Narxi</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Qoldiq</Text>
-                <Text style={[styles.th, { flex: 0.5, textAlign: 'center' }]}>Amallar</Text>
-              </View>
-              <ScrollView>
-                {products.map(p => (
-                  <View key={p.id} style={styles.tr}>
-                    <Text style={[styles.td, { flex: 2, fontWeight: '600' }]}>{p.name}</Text>
-                    <Text style={[styles.td, { flex: 1 }]}>{p.category}</Text>
-                    <Text style={[styles.td, { flex: 1 }]}>{p.price.toLocaleString()} so'm</Text>
-                    <Text style={[styles.td, { flex: 1, color: p.stock < 15 ? '#E31E24' : '#28A745', fontWeight: 'bold' }]}>{p.stock} ta</Text>
-                    <View style={[styles.td, { flex: 0.5, flexDirection: 'row', justifyContent: 'center', gap: 12 }]}>
-                      <TouchableOpacity onPress={() => openEditModal(p)}>
-                        <Ionicons name="pencil-outline" size={18} color="#007BFF" />
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setProducts(prev => prev.filter(x => x.id !== p.id))}>
-                        <Ionicons name="trash-outline" size={18} color="#E31E24" />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-          </View>
-        );
-      case 'Hisobotlar':
-        return (
-          <View style={styles.pageContent}>
-            <Text style={styles.pageTitle}>Hisobotlar</Text>
-            <View style={styles.statsGrid}>
-              <View style={styles.statCard}>
-                <Ionicons name="cash-outline" size={32} color="#E31E24" />
-                <Text style={styles.statLabel}>Bugungi Daromad</Text>
-                <Text style={styles.statValue}>1,240,000 so'm</Text>
-              </View>
-              <View style={styles.statCard}>
-                <Ionicons name="cube-outline" size={32} color="#007BFF" />
-                <Text style={styles.statLabel}>Sotilgan mahsulotlar</Text>
-                <Text style={styles.statValue}>128 ta</Text>
-              </View>
-            </View>
-          </View>
-        );
       case 'Qarzdorlar':
         return (
           <View style={styles.pageContent}>
             <View style={styles.pageHeaderRow}>
               <Text style={styles.pageTitle}>Qarzdorlar</Text>
-              <TouchableOpacity style={styles.primaryBtn}>
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddDebtModal(true)}>
                 <Ionicons name="add" size={20} color="#fff" />
                 <Text style={styles.primaryBtnText}>Qarz qo'shish</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Add Debt Modal */}
+            <Modal
+              visible={showAddDebtModal}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setShowAddDebtModal(false)}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.modalBox}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Yangi Qarz Qo'shish</Text>
+                    <TouchableOpacity onPress={() => setShowAddDebtModal(false)}>
+                      <Ionicons name="close" size={24} color="#333" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>Mijoz F.I.O *</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="Masalan: Aliyev Vali"
+                    value={debtorName}
+                    onChangeText={setDebtorName}
+                  />
+
+                  <Text style={styles.fieldLabel}>Telefon raqami</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="+998 90 123 45 67"
+                    value={debtorPhone}
+                    onChangeText={setDebtorPhone}
+                    keyboardType="phone-pad"
+                  />
+
+                  <Text style={styles.fieldLabel}>Qarz summasi *</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="500000"
+                    value={debtAmount}
+                    onChangeText={setDebtAmount}
+                    keyboardType="numeric"
+                  />
+
+                  <Text style={styles.fieldLabel}>To'lash muddati (KK.OO.YYYY) *</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="12.05.2026"
+                    value={debtDate}
+                    onChangeText={setDebtDate}
+                  />
+
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddDebtModal(false)}>
+                      <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.saveBtn, (!debtorName || !debtAmount || !debtDate) && styles.saveBtnDisabled]}
+                      onPress={handleAddDebt}
+                    >
+                      <Ionicons name="checkmark" size={20} color="#fff" />
+                      <Text style={styles.saveBtnText}>Saqlash</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
             
             <View style={[styles.statsGrid, { marginBottom: 20 }]}>
               <View style={[styles.statCard, { flex: 1, backgroundColor: '#FFF5F5', borderColor: '#FFEBEB', borderWidth: 1 }]}>
@@ -633,7 +439,9 @@ export default function PosScreen() {
                 </View>
                 <View>
                   <Text style={styles.statLabel}>Umumiy Qarz Miqdori</Text>
-                  <Text style={[styles.statValue, { color: '#E31E24' }]}>2,450,000 so'm</Text>
+                  <Text style={[styles.statValue, { color: '#E31E24' }]}>
+                    {debtors.reduce((sum, d) => sum + d.amount, 0).toLocaleString()} so'm
+                  </Text>
                 </View>
               </View>
               <View style={[styles.statCard, { flex: 1 }]}>
@@ -642,7 +450,7 @@ export default function PosScreen() {
                 </View>
                 <View>
                   <Text style={styles.statLabel}>Qarzdorlar Soni</Text>
-                  <Text style={styles.statValue}>12 ta</Text>
+                  <Text style={styles.statValue}>{debtors.length} ta</Text>
                 </View>
               </View>
               <View style={[styles.statCard, { flex: 1 }]}>
@@ -651,7 +459,7 @@ export default function PosScreen() {
                 </View>
                 <View>
                   <Text style={styles.statLabel}>To'langan QarZlar (Oy)</Text>
-                  <Text style={styles.statValue}>850,000 so'm</Text>
+                  <Text style={styles.statValue}>{totalPaidAmount.toLocaleString()} so'm</Text>
                 </View>
               </View>
             </View>
@@ -665,91 +473,53 @@ export default function PosScreen() {
                 <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Harakatlar</Text>
               </View>
               <ScrollView>
-                {[
-                  { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
-                  { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
-                  { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
-                ].map(debtor => (
-                  <View key={debtor.id} style={styles.tr}>
-                    <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-                      <View style={styles.userAvatar}>
-                        <Text style={styles.userAvatarText}>{debtor.name.charAt(0)}</Text>
+                {debtors.map(debtor => {
+                  // Re-calculate over status dynamically
+                  let isOver = debtor.over;
+                  try {
+                    const [day, month, year] = debtor.date.split('.').map(Number);
+                    const deadlineDate = new Date(year, month - 1, day);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    isOver = deadlineDate < today;
+                  } catch (e) {}
+
+                  return (
+                    <View key={debtor.id} style={styles.tr}>
+                      <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                        <View style={styles.userAvatar}>
+                          <Text style={styles.userAvatarText}>{debtor.name.charAt(0)}</Text>
+                        </View>
+                        <Text style={{ fontWeight: '600', color: '#333' }}>{debtor.name}</Text>
                       </View>
-                      <Text style={{ fontWeight: '600', color: '#333' }}>{debtor.name}</Text>
+                      <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>{debtor.phone}</Text>
+                      <Text style={[styles.td, { flex: 1.5, fontWeight: 'bold', color: '#E31E24' }]}>
+                        {debtor.amount.toLocaleString()} so'm
+                      </Text>
+                      <View style={[styles.td, { flex: 1 }]}>
+                         <View style={[styles.badge, isOver ? styles.badgeDanger : styles.badgeWarning]}>
+                            <Text style={[styles.badgeText, isOver ? styles.badgeDangerText : styles.badgeWarningText]}>
+                              {debtor.date}
+                            </Text>
+                         </View>
+                      </View>
+                      <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                        <TouchableOpacity 
+                          style={styles.actionBtn} 
+                          onPress={() => handlePayDebt(debtor.id)}
+                        >
+                          <Text style={styles.actionBtnText}>To'lash</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>{debtor.phone}</Text>
-                    <Text style={[styles.td, { flex: 1.5, fontWeight: 'bold', color: '#E31E24' }]}>
-                      {debtor.amount.toLocaleString()} so'm
-                    </Text>
-                    <View style={[styles.td, { flex: 1 }]}>
-                       <View style={[styles.badge, debtor.over ? styles.badgeDanger : styles.badgeWarning]}>
-                          <Text style={[styles.badgeText, debtor.over ? styles.badgeDangerText : styles.badgeWarningText]}>
-                            {debtor.date}
-                          </Text>
-                       </View>
-                    </View>
-                    <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
-                      <TouchableOpacity style={styles.actionBtn}>
-                        <Text style={styles.actionBtnText}>To'lash</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </ScrollView>
             </View>
           </View>
         );
-      case 'Xarajatlar':
-        return (
-          <View style={styles.pageContent}>
-            <Text style={styles.pageTitle}>Xarajatlar</Text>
-            <View style={styles.card}>
-               <View style={styles.tableHeader}>
-                <Text style={[styles.th, { flex: 2 }]}>Izoh</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Sana</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Summa</Text>
-              </View>
-              <View style={styles.tr}>
-                <Text style={[styles.td, { flex: 2 }]}>Tushlik uchun</Text>
-                <Text style={[styles.td, { flex: 1 }]}>04.05.2026</Text>
-                <Text style={[styles.td, { flex: 1, color: '#E31E24' }]}>40,000 so'm</Text>
-              </View>
-              <View style={styles.tr}>
-                <Text style={[styles.td, { flex: 2 }]}>Elektr energiya</Text>
-                <Text style={[styles.td, { flex: 1 }]}>01.05.2026</Text>
-                <Text style={[styles.td, { flex: 1, color: '#E31E24' }]}>150,000 so'm</Text>
-              </View>
-            </View>
-          </View>
-        );
-      case 'Sozlamalar':
-        return (
-          <View style={styles.pageContent}>
-            <Text style={styles.pageTitle}>Sozlamalar</Text>
-            <View style={styles.card}>
-              <TouchableOpacity style={styles.settingItem}>
-                 <Ionicons name="person-outline" size={24} color="#333" />
-                 <Text style={styles.settingText}>Profil ma'lumotlari</Text>
-                 <Ionicons name="chevron-forward" size={20} color="#999" style={{marginLeft: 'auto'}}/>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.settingItem}>
-                 <Ionicons name="print-outline" size={24} color="#333" />
-                 <Text style={styles.settingText}>Printer sozlamalari</Text>
-                 <Ionicons name="chevron-forward" size={20} color="#999" style={{marginLeft: 'auto'}}/>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.settingItem}>
-                 <Ionicons name="lock-closed-outline" size={24} color="#333" />
-                 <Text style={styles.settingText}>Parolni o'zgartirish</Text>
-                 <Ionicons name="chevron-forward" size={20} color="#999" style={{marginLeft: 'auto'}}/>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.settingItem, { borderBottomWidth: 0 }]}>
-                 <Ionicons name="language-outline" size={24} color="#333" />
-                 <Text style={styles.settingText}>Tizim tili (O'zbekcha)</Text>
-                 <Ionicons name="chevron-forward" size={20} color="#999" style={{marginLeft: 'auto'}}/>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
+
+
       default:
         return null;
     }
@@ -768,11 +538,7 @@ export default function PosScreen() {
 
         <View style={styles.navContainer}>
           <NavItem icon="cart" label="Sotuv" active={activePage === 'Sotuv'} onPress={() => setActivePage('Sotuv')} />
-          <NavItem icon="cube-outline" label="Mahsulotlar" active={activePage === 'Mahsulotlar'} onPress={() => setActivePage('Mahsulotlar')} />
-          <NavItem icon="bar-chart-outline" label="Hisobotlar" active={activePage === 'Hisobotlar'} onPress={() => setActivePage('Hisobotlar')} />
           <NavItem icon="people-outline" label="Qarzdorlar" active={activePage === 'Qarzdorlar'} onPress={() => setActivePage('Qarzdorlar')} />
-          <NavItem icon="wallet-outline" label="Xarajatlar" active={activePage === 'Xarajatlar'} onPress={() => setActivePage('Xarajatlar')} />
-          <NavItem icon="settings-outline" label="Sozlamalar" active={activePage === 'Sozlamalar'} onPress={() => setActivePage('Sozlamalar')} />
           <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10, marginHorizontal: 20 }} />
           <NavItem icon="shield-checkmark-outline" label="Admin Panel" onPress={() => router.push('/admin')} />
         </View>
@@ -817,16 +583,7 @@ function NavItem({ icon, label, active = false, onPress }: any) {
   );
 }
 
-function QuickActionBtn({ icon, label, color, textColor }: any) {
-  return (
-    <TouchableOpacity style={[styles.quickActionBtn, { backgroundColor: color }]}>
-      <View style={styles.qaIconBox}>
-        <Ionicons name={icon} size={24} color="#E31E24" />
-      </View>
-      <Text style={[styles.qaLabel, textColor ? { color: textColor } : {}]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
+
 
 const styles = StyleSheet.create({
   container: {
@@ -1091,49 +848,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A1A1A',
   },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-  },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    backgroundColor: '#fff',
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    width: 8,
-    height: 8,
-    backgroundColor: '#E31E24',
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  profileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 6,
-    paddingHorizontal: 12,
-    borderRadius: 22,
-    gap: 8,
-  },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-  },
-  profileText: {
-    fontWeight: '600',
-    color: '#333',
-  },
+
   controlsRow: {
     flexDirection: 'row',
     gap: 12,
@@ -1259,39 +974,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  quickActions: {
-    marginTop: 'auto',
-    paddingTop: 20,
-  },
-  quickActionRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  quickActionBtn: {
-    flex: 1,
-    height: 100,
-    borderRadius: 20,
-    padding: 16,
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 2,
-  },
-  qaIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#F8F9FA',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  qaLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666',
-  },
+
   cartPanel: {
     width: 350,
     backgroundColor: '#fff',
