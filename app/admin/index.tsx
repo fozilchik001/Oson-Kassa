@@ -201,6 +201,53 @@ export default function AdminDashboard() {
     { id: 3, title: 'Tushlik (Xodimlar)', amount: 120000, date: '04.05.2026', category: 'Oziq-ovqat' },
   ]);
 
+  const [debtors, setDebtors] = useState([
+    { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
+    { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
+    { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
+  ]);
+
+  const [totalPaidAmount, setTotalPaidAmount] = useState(850000);
+
+  const handlePayDebt = (id: number) => {
+    const debtToPay = debtors.find(d => d.id === id);
+    if (debtToPay) {
+      setTotalPaidAmount(prev => prev + debtToPay.amount);
+    }
+    setDebtors(prev => prev.filter(d => d.id !== id));
+  };
+
+  const [showAddDebtModal, setShowAddDebtModal] = useState(false);
+  const [debtorName, setDebtorName] = useState('');
+  const [debtorPhone, setDebtorPhone] = useState('');
+  const [debtAmount, setDebtAmount] = useState('');
+  const [debtDate, setDebtDate] = useState('');
+
+  const handleAddDebt = () => {
+    if (!debtorName.trim() || !debtAmount.trim() || !debtDate.trim()) return;
+    const [day, month, year] = debtDate.split('.').map(Number);
+    const deadlineDate = new Date(year, month - 1, day);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isOver = deadlineDate < today;
+
+    const newDebt = {
+      id: Date.now(),
+      name: debtorName.trim(),
+      phone: debtorPhone.trim(),
+      amount: parseInt(debtAmount.replace(/\D/g, ''), 10) || 0,
+      date: debtDate.trim(),
+      over: isOver,
+    };
+
+    setDebtors(prev => [...prev, newDebt]);
+    setDebtorName('');
+    setDebtorPhone('');
+    setDebtAmount('');
+    setDebtDate('');
+    setShowAddDebtModal(false);
+  };
+
   const [transactions, setTransactions] = useState([
     { id: '1', customer: 'Aliyev Vali', amount: 120000, status: 'Muvaffaqiyatli', time: '10:45', method: 'Naqd' },
     { id: '2', customer: 'Rustamov Jasur', amount: 45000, status: 'Kutilmoqda', time: '10:30', method: 'Karta' },
@@ -848,12 +895,170 @@ export default function AdminDashboard() {
     </View>
   );
 
+  const renderDebtors = () => (
+    <View style={styles.card}>
+      <View style={styles.cardHeader}>
+        <Text style={styles.cardTitle}>Qarzdorlar</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddDebtModal(true)}>
+          <Ionicons name="add" size={20} color="#fff" />
+          <Text style={styles.primaryBtnText}>Qarz qo'shish</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Modal
+        visible={showAddDebtModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddDebtModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Yangi Qarz Qo'shish</Text>
+              <TouchableOpacity onPress={() => setShowAddDebtModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Mijoz F.I.O *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Masalan: Aliyev Vali"
+              value={debtorName}
+              onChangeText={setDebtorName}
+            />
+
+            <Text style={styles.fieldLabel}>Telefon raqami</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="+998 90 123 45 67"
+              value={debtorPhone}
+              onChangeText={setDebtorPhone}
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.fieldLabel}>Qarz summasi *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="500000"
+              value={debtAmount}
+              onChangeText={setDebtAmount}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.fieldLabel}>To'lash muddati (KK.OO.YYYY) *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="12.05.2026"
+              value={debtDate}
+              onChangeText={setDebtDate}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddDebtModal(false)}>
+                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!debtorName || !debtAmount || !debtDate) && styles.saveBtnDisabled]}
+                onPress={handleAddDebt}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Saqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <View style={[styles.statsGrid, { marginBottom: 20 }]}>
+        <View style={[styles.statCard, { flex: 1, backgroundColor: '#FFF5F5', borderColor: '#FFEBEB', borderWidth: 1 }]}>
+          <View style={styles.statIconWrapperRed}>
+            <Ionicons name="wallet-outline" size={24} color="#E31E24" />
+          </View>
+          <View>
+            <Text style={styles.statLabel}>Umumiy Qarz Miqdori</Text>
+            <Text style={[styles.statValue, { color: '#E31E24' }]}>
+              {debtors.reduce((sum, d) => sum + d.amount, 0).toLocaleString()} so'm
+            </Text>
+          </View>
+        </View>
+        <View style={[styles.statCard, { flex: 1 }]}>
+           <View style={styles.statIconWrapperGray}>
+            <Ionicons name="people-outline" size={24} color="#333" />
+          </View>
+          <View>
+            <Text style={styles.statLabel}>Qarzdorlar Soni</Text>
+            <Text style={styles.statValue}>{debtors.length} ta</Text>
+          </View>
+        </View>
+        <View style={[styles.statCard, { flex: 1 }]}>
+           <View style={styles.statIconWrapperGreen}>
+            <Ionicons name="checkmark-circle-outline" size={24} color="#28A745" />
+          </View>
+          <View>
+            <Text style={styles.statLabel}>To'langan QarZlar (Oy)</Text>
+            <Text style={styles.statValue}>{totalPaidAmount.toLocaleString()} so'm</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.tableHeader}>
+        <Text style={[styles.th, { flex: 2 }]}>FIO</Text>
+        <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
+        <Text style={[styles.th, { flex: 1.5 }]}>Qarz Summasi</Text>
+        <Text style={[styles.th, { flex: 1 }]}>Muddati</Text>
+        <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Harakatlar</Text>
+      </View>
+      {debtors.map(debtor => {
+        let isOver = debtor.over;
+        try {
+          const [day, month, year] = debtor.date.split('.').map(Number);
+          const deadlineDate = new Date(year, month - 1, day);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          isOver = deadlineDate < today;
+        } catch (e) {}
+
+        return (
+          <View key={debtor.id} style={styles.tr}>
+            <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+              <View style={styles.miniAvatar}>
+                <Text style={styles.miniAvatarText}>{debtor.name.charAt(0)}</Text>
+              </View>
+              <Text style={{ fontWeight: '600', color: '#333' }}>{debtor.name}</Text>
+            </View>
+            <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>{debtor.phone}</Text>
+            <Text style={[styles.td, { flex: 1.5, fontWeight: 'bold', color: '#E31E24' }]}>
+              {debtor.amount.toLocaleString()} so'm
+            </Text>
+            <View style={[styles.td, { flex: 1 }]}>
+               <View style={[styles.badge, isOver ? {backgroundColor: '#FFEBEE'} : styles.badgeWarning]}>
+                  <Text style={[styles.badgeText, isOver ? {color: '#C62828'} : styles.badgeWarningText]}>
+                    {debtor.date}
+                  </Text>
+               </View>
+            </View>
+            <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+              <TouchableOpacity 
+                style={styles.actionBtn} 
+                onPress={() => handlePayDebt(debtor.id)}
+              >
+                <Text style={{color: '#E31E24', fontWeight: 'bold'}}>To'lash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'Hisobotlar': return renderOverview();
       case 'Staff': return renderStaff();
       case 'Inventory': return renderInventory();
       case 'Expenses': return renderExpenses();
+      case 'Qarzdorlar': return renderDebtors();
       case 'Settings':
         return (
           <View style={styles.card}>
@@ -902,6 +1107,12 @@ export default function AdminDashboard() {
           onPress={() => setActiveTab('Staff')} 
         />
         <SidebarItem 
+          icon="book-outline" 
+          label="Qarzdorlar" 
+          active={activeTab === 'Qarzdorlar'} 
+          onPress={() => setActiveTab('Qarzdorlar')} 
+        />
+        <SidebarItem 
           icon="cube-outline" 
           label="Ombor qoldig'i" 
           active={activeTab === 'Inventory'} 
@@ -944,6 +1155,7 @@ export default function AdminDashboard() {
               {activeTab === 'Hisobotlar' ? 'Hisobotlar va Statistika' : 
                activeTab === 'Staff' ? 'Xodimlar' :
                activeTab === 'Inventory' ? 'Ombor' :
+               activeTab === 'Qarzdorlar' ? 'Qarzdorlar' :
                activeTab === 'Expenses' ? 'Xarajatlar' : 'Sozlamalar'}
             </Text>
             <Text style={styles.subGreeting}>Xush kelibsiz! Tizim holati bilan tanishing</Text>
@@ -1433,6 +1645,17 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#1A1A1A',
+  },
+  actionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFEBEE',
+  },
+  actionBtnText: {
+    color: '#E31E24',
+    fontWeight: 'bold',
+    fontSize: 13,
   },
   miniAvatar: {
     width: 32,
