@@ -26,11 +26,18 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState('Hisobotlar');
 
   // Staff state
-  const [staff, setStaff] = useState([
-    { id: 1, name: 'Sardorbek Amanov', role: 'Kassir', phone: '+998 90 123 45 67', status: 'Faol' },
-    { id: 2, name: 'Zilola Karimova', role: 'Kassir', phone: '+998 93 987 65 43', status: 'Ta\'tilda' },
-    { id: 3, name: 'Bobur Mirzo', role: 'Admin', phone: '+998 97 111 22 33', status: 'Faol' },
-  ]);
+  const [staff, setStaff] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('staff');
+      if (saved) return JSON.parse(saved);
+    }
+    return [
+      { id: 1, name: 'Sardorbek Amanov', role: 'Kassir', phone: '+998 90 123 45 67', status: 'Faol' },
+      { id: 2, name: 'Zilola Karimova', role: 'Kassir', phone: '+998 93 987 65 43', status: 'Ta\'tilda' },
+      { id: 3, name: 'Bobur Mirzo', role: 'Admin', phone: '+998 97 111 22 33', status: 'Faol' },
+    ];
+  });
+
 
   // Add Staff Modal state
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -84,20 +91,19 @@ export default function AdminDashboard() {
   };
 
   // Inventory state
-  const [inventory, setInventory] = useState(INITIAL_PRODUCTS);
+  const [inventory, setInventory] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('products');
+      if (saved) return JSON.parse(saved);
+    }
+    return INITIAL_PRODUCTS;
+  });
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('products');
-      if (saved) {
-        try {
-          setInventory(JSON.parse(saved));
-        } catch (e) {
-          console.error('Failed to parse inventory', e);
-        }
-      }
+      localStorage.setItem('products', JSON.stringify(inventory));
     }
-  }, []);
+  }, [inventory]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -215,19 +221,38 @@ export default function AdminDashboard() {
   };
 
   // Expenses state
-  const [expenses, setExpenses] = useState([
-    { id: 1, title: 'Ijara haqi', amount: 2500000, date: '01.05.2026', category: 'Ijara' },
-    { id: 2, title: 'Elektr energiya', amount: 450000, date: '02.05.2026', category: 'Kommunal' },
-    { id: 3, title: 'Tushlik (Xodimlar)', amount: 120000, date: '04.05.2026', category: 'Oziq-ovqat' },
-  ]);
+  const [expenses, setExpenses] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('expenses');
+      if (saved) return JSON.parse(saved);
+    }
+    return [
+      { id: 1, title: 'Ijara haqi', amount: 2500000, date: '01.05.2026', category: 'Ijara' },
+      { id: 2, title: 'Elektr energiya', amount: 450000, date: '02.05.2026', category: 'Kommunal' },
+      { id: 3, title: 'Tushlik (Xodimlar)', amount: 120000, date: '04.05.2026', category: 'Oziq-ovqat' },
+    ];
+  });
 
-  const [debtors, setDebtors] = useState([
-    { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
-    { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
-    { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
-  ]);
+  const [debtors, setDebtors] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('debtors');
+      if (saved) return JSON.parse(saved);
+    }
+    return [
+      { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
+      { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
+      { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
+    ];
+  });
 
-  const [totalPaidAmount, setTotalPaidAmount] = useState(850000);
+  const [totalPaidAmount, setTotalPaidAmount] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('totalPaidAmount');
+      if (saved) return parseInt(saved, 10);
+    }
+    return 850000;
+  });
+
 
   const handlePayDebt = (id: number) => {
     const debtToPay = debtors.find(d => d.id === id);
@@ -268,35 +293,32 @@ export default function AdminDashboard() {
     setShowAddDebtModal(false);
   };
 
-  const [transactions, setTransactions] = useState([
-    { id: '1', customer: 'Aliyev Vali', amount: 120000, status: 'Muvaffaqiyatli', time: '10:45', method: 'Naqd' },
-    { id: '2', customer: 'Rustamov Jasur', amount: 45000, status: 'Kutilmoqda', time: '10:30', method: 'Karta' },
-    { id: '3', customer: 'Karimova Malika', amount: 210000, status: 'Muvaffaqiyatli', time: '10:15', method: 'Naqd' },
-    { id: '4', customer: 'Xolmatov Aziz', amount: 8000, status: 'Bekor qilingan', time: '09:50', method: 'Karta' },
-  ]);
-
-  const [salesItems, setSalesItems] = useState([
-    { id: 1, name: 'Coca Cola 1.5L', quantity: 24, total: 240000, category: 'Ichimliklar' },
-    { id: 2, name: 'Chortoq 0.5L', quantity: 15, total: 75000, category: 'Ichimliklar' },
-    { id: 3, name: 'Lays Chips 80g', quantity: 42, total: 420000, category: 'Snaklar' },
-    { id: 4, name: 'Orbit White', quantity: 30, total: 90000, category: 'Snaklar' },
-  ]);
-
-  useEffect(() => {
+  const [transactions, setTransactions] = useState(() => {
     if (Platform.OS === 'web') {
-      const savedStaff = localStorage.getItem('staff');
-      if (savedStaff) setStaff(JSON.parse(savedStaff));
-      
-      const savedExpenses = localStorage.getItem('expenses');
-      if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
-      
-      const savedTransactions = localStorage.getItem('transactions');
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-      
-      const savedSalesItems = localStorage.getItem('salesItems');
-      if (savedSalesItems) setSalesItems(JSON.parse(savedSalesItems));
+      const saved = localStorage.getItem('transactions');
+      if (saved) return JSON.parse(saved);
     }
-  }, []);
+    return [
+      { id: '1', customer: 'Aliyev Vali', amount: 120000, status: 'Muvaffaqiyatli', time: '10:45', method: 'Naqd' },
+      { id: '2', customer: 'Rustamov Jasur', amount: 45000, status: 'Kutilmoqda', time: '10:30', method: 'Karta' },
+      { id: '3', customer: 'Karimova Malika', amount: 210000, status: 'Muvaffaqiyatli', time: '10:15', method: 'Naqd' },
+      { id: '4', customer: 'Xolmatov Aziz', amount: 8000, status: 'Bekor qilingan', time: '09:50', method: 'Karta' },
+    ];
+  });
+
+  const [salesItems, setSalesItems] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('salesItems');
+      if (saved) return JSON.parse(saved);
+    }
+    return [
+      { id: 1, name: 'Coca Cola 1.5L', quantity: 24, total: 240000, category: 'Ichimliklar' },
+      { id: 2, name: 'Chortoq 0.5L', quantity: 15, total: 75000, category: 'Ichimliklar' },
+      { id: 3, name: 'Lays Chips 80g', quantity: 42, total: 420000, category: 'Snaklar' },
+      { id: 4, name: 'Orbit White', quantity: 30, total: 90000, category: 'Snaklar' },
+    ];
+  });
+
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -304,8 +326,11 @@ export default function AdminDashboard() {
       localStorage.setItem('expenses', JSON.stringify(expenses));
       localStorage.setItem('transactions', JSON.stringify(transactions));
       localStorage.setItem('salesItems', JSON.stringify(salesItems));
+      localStorage.setItem('debtors', JSON.stringify(debtors));
+      localStorage.setItem('totalPaidAmount', totalPaidAmount.toString());
     }
-  }, [staff, expenses, transactions, salesItems]);
+  }, [staff, expenses, transactions, salesItems, debtors, totalPaidAmount]);
+
 
 
   const [chartPeriod, setChartPeriod] = useState('Haftalik');

@@ -34,9 +34,21 @@ export default function PosScreen() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<any[]>([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
+  const [splitCash, setSplitCash] = useState('');
+  const [splitCard, setSplitCard] = useState('');
+
+
 
   // Products state (local, so we can add)
-  const [products, setProducts] = useState<any[]>(INITIAL_PRODUCTS);
+  const [products, setProducts] = useState<any[]>(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('products');
+      if (saved) return JSON.parse(saved);
+    }
+    return INITIAL_PRODUCTS;
+  });
 
   useEffect(() => {
     const loadProducts = () => {
@@ -52,8 +64,6 @@ export default function PosScreen() {
       }
     };
 
-    loadProducts();
-
     if (Platform.OS === 'web') {
       window.addEventListener('focus', loadProducts);
       return () => window.removeEventListener('focus', loadProducts);
@@ -67,6 +77,7 @@ export default function PosScreen() {
   }, [products]);
 
 
+
   // Add Product Modal state
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState('');
@@ -77,23 +88,25 @@ export default function PosScreen() {
   const [newImage, setNewImage] = useState<string | null>(null);
 
   // Debtors state
-  const [debtors, setDebtors] = useState([
-    { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
-    { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
-    { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
-  ]);
-
-  const [totalPaidAmount, setTotalPaidAmount] = useState(850000);
-
-  useEffect(() => {
+  const [debtors, setDebtors] = useState(() => {
     if (Platform.OS === 'web') {
-      const savedDebtors = localStorage.getItem('debtors');
-      if (savedDebtors) setDebtors(JSON.parse(savedDebtors));
-      
-      const savedPaidAmount = localStorage.getItem('totalPaidAmount');
-      if (savedPaidAmount) setTotalPaidAmount(parseInt(savedPaidAmount, 10));
+      const saved = localStorage.getItem('debtors');
+      if (saved) return JSON.parse(saved);
     }
-  }, []);
+    return [
+      { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
+      { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
+      { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
+    ];
+  });
+
+  const [totalPaidAmount, setTotalPaidAmount] = useState(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('totalPaidAmount');
+      if (saved) return parseInt(saved, 10);
+    }
+    return 850000;
+  });
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -101,6 +114,7 @@ export default function PosScreen() {
       localStorage.setItem('totalPaidAmount', totalPaidAmount.toString());
     }
   }, [debtors, totalPaidAmount]);
+
 
 
   const handlePayDebt = (id: number) => {
@@ -288,26 +302,90 @@ export default function PosScreen() {
 
   const handleCheckout = () => {
     if (cart.length === 0) return;
-    
-    // Update products stock
-    setProducts(prev => {
-      const newProducts = prev.map(p => {
-        const cartItem = cart.find(item => item.id === p.id);
-        if (cartItem) {
-          return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
-        }
-        return p;
-      });
-      
-      if (Platform.OS === 'web') {
-        localStorage.setItem('products', JSON.stringify(newProducts));
+    setShowPaymentModal(true);
+  };
+
+  const completeSale = (method: string, splitData?: { cash: number, card: number }) => {
+    if (method === 'Qarz') {
+      setShowPaymentModal(false);
+      setDebtorName('');
+      setDebtAmount(total.toString());
+      setShowAddDebtModal(true);
+      return;
+    }
+
+    if (method === 'Aralash' && !splitData) {
+      setSplitCash(total.toString());
+      setSplitCard('0');
+      setShowPaymentModal(false);
+      setShowSplitPaymentModal(true);
+      return;
+    }
+
+    const newProducts = products.map(p => {
+      const cartItem = cart.find(item => item.id === p.id);
+      if (cartItem) {
+        return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
       }
-      return newProducts;
+      return p;
     });
     
+    setProducts(newProducts);
+
+    // Record Transaction for Admin
+    if (Platform.OS === 'web') {
+      const savedTransactions = localStorage.getItem('transactions');
+      const transactions = savedTransactions ? JSON.parse(savedTransactions) : [];
+      const methodLabel = method === 'Aralash' && splitData 
+        ? `Aralash (N:${splitData.cash.toLocaleString()} + K:${splitData.card.toLocaleString()})`
+        : method;
+
+      const newTransaction = {
+        id: String(Date.now()),
+        customer: 'Mijoz',
+        amount: total,
+        status: 'Muvaffaqiyatli',
+        time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+        method: methodLabel
+      };
+      localStorage.setItem('transactions', JSON.stringify([newTransaction, ...transactions]));
+    }
+
     alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
     setCart([]);
+    setShowPaymentModal(false);
+    setShowSplitPaymentModal(false);
   };
+
+  const handleSplitConfirm = () => {
+    const cash = parseInt(splitCash.replace(/\D/g, ''), 10) || 0;
+    const card = parseInt(splitCard.replace(/\D/g, ''), 10) || 0;
+    
+    if (cash + card < total) {
+      alert("Kiritilgan summa jami summadan kam!");
+      return;
+    }
+    
+    completeSale('Aralash', { cash, card });
+  };
+
+  const onSplitCashChange = (val: string) => {
+    setSplitCash(val);
+    const num = parseInt(val.replace(/\D/g, ''), 10) || 0;
+    if (num <= total) {
+      setSplitCard((total - num).toString());
+    }
+  };
+
+  const onSplitCardChange = (val: string) => {
+    setSplitCard(val);
+    const num = parseInt(val.replace(/\D/g, ''), 10) || 0;
+    if (num <= total) {
+      setSplitCash((total - num).toString());
+    }
+  };
+
+
 
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -479,71 +557,11 @@ export default function PosScreen() {
               </TouchableOpacity>
             </View>
 
-            {/* Add Debt Modal */}
-            <Modal
-              visible={showAddDebtModal}
-              transparent
-              animationType="fade"
-              onRequestClose={() => setShowAddDebtModal(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalBox}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Yangi Qarz Qo'shish</Text>
-                    <TouchableOpacity onPress={() => setShowAddDebtModal(false)}>
-                      <Ionicons name="close" size={24} color="#333" />
-                    </TouchableOpacity>
-                  </View>
+            {/* Modals moved to root */}
 
-                  <Text style={styles.fieldLabel}>Mijoz F.I.O *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Masalan: Aliyev Vali"
-                    value={debtorName}
-                    onChangeText={setDebtorName}
-                  />
 
-                  <Text style={styles.fieldLabel}>Telefon raqami</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="+998 90 123 45 67"
-                    value={debtorPhone}
-                    onChangeText={setDebtorPhone}
-                    keyboardType="phone-pad"
-                  />
 
-                  <Text style={styles.fieldLabel}>Qarz summasi *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="500000"
-                    value={debtAmount}
-                    onChangeText={setDebtAmount}
-                    keyboardType="numeric"
-                  />
 
-                  <Text style={styles.fieldLabel}>To'lash muddati (KK.OO.YYYY) *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="12.05.2026"
-                    value={debtDate}
-                    onChangeText={setDebtDate}
-                  />
-
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddDebtModal(false)}>
-                      <Text style={styles.cancelBtnText}>Bekor qilish</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.saveBtn, (!debtorName || !debtAmount || !debtDate) && styles.saveBtnDisabled]}
-                      onPress={handleAddDebt}
-                    >
-                      <Ionicons name="checkmark" size={20} color="#fff" />
-                      <Text style={styles.saveBtnText}>Saqlash</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            </Modal>
             
             <View style={[styles.statsGrid, { marginBottom: 20 }]}>
               <View style={[styles.statCard, { flex: 1, backgroundColor: '#FFF5F5', borderColor: '#FFEBEB', borderWidth: 1 }]}>
@@ -739,6 +757,196 @@ export default function PosScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Payment Modal */}
+      <Modal
+        visible={showPaymentModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>To'lov turini tanlang</Text>
+              <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.totalDisplay}>Jami: {total.toLocaleString()} so'm</Text>
+
+            <View style={styles.paymentOptions}>
+              <TouchableOpacity 
+                style={[styles.payOptionBtn, { backgroundColor: '#F1F8E9' }]} 
+                onPress={() => completeSale('Naqd')}
+              >
+                <Ionicons name="cash-outline" size={28} color="#43A047" />
+                <Text style={[styles.payOptionText, { color: '#43A047' }]}>Naqd pul</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.payOptionBtn, { backgroundColor: '#E3F2FD' }]} 
+                onPress={() => completeSale('Karta')}
+              >
+                <Ionicons name="card-outline" size={28} color="#1E88E5" />
+                <Text style={[styles.payOptionText, { color: '#1E88E5' }]}>Karta orqali</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.payOptionBtn, { backgroundColor: '#FFF3E0' }]} 
+                onPress={() => completeSale('Aralash')}
+              >
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  <Ionicons name="cash-outline" size={20} color="#FB8C00" />
+                  <Ionicons name="card-outline" size={20} color="#FB8C00" />
+                </View>
+                <Text style={[styles.payOptionText, { color: '#FB8C00' }]}>Aralash (Naqd+Karta)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={[styles.payOptionBtn, { backgroundColor: '#FFEBEE' }]} 
+                onPress={() => completeSale('Qarz')}
+              >
+                <Ionicons name="people-outline" size={28} color="#E31E24" />
+                <Text style={[styles.payOptionText, { color: '#E31E24' }]}>Qarzga</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Split Payment Modal */}
+      <Modal
+        visible={showSplitPaymentModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSplitPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Aralash To'lov</Text>
+              <TouchableOpacity onPress={() => setShowSplitPaymentModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.totalBanner}>
+              <Text style={styles.totalBannerLabel}>Jami summa</Text>
+              <Text style={styles.totalBannerValue}>{total.toLocaleString()} so'm</Text>
+            </View>
+
+            <Text style={styles.fieldLabel}>Naqd pul miqdori</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="cash-outline" size={20} color="#28A745" style={{ marginRight: 10 }} />
+              <TextInput
+                style={styles.modalInputNoMargin}
+                placeholder="0"
+                value={splitCash}
+                onChangeText={onSplitCashChange}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <Text style={[styles.fieldLabel, { marginTop: 20 }]}>Karta orqali miqdori</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="card-outline" size={20} color="#2196F3" style={{ marginRight: 10 }} />
+              <TextInput
+                style={styles.modalInputNoMargin}
+                placeholder="0"
+                value={splitCard}
+                onChangeText={onSplitCardChange}
+                keyboardType="numeric"
+              />
+            </View>
+
+            <View style={[styles.modalActions, { marginTop: 30 }]}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => {
+                setShowSplitPaymentModal(false);
+                setShowPaymentModal(true);
+              }}>
+                <Text style={styles.cancelBtnText}>Orqaga</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleSplitConfirm}
+              >
+                <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Tasdiqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add Debt Modal */}
+
+      <Modal
+        visible={showAddDebtModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddDebtModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Yangi Qarz Qo'shish</Text>
+              <TouchableOpacity onPress={() => setShowAddDebtModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Mijoz F.I.O *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Masalan: Aliyev Vali"
+              value={debtorName}
+              onChangeText={setDebtorName}
+            />
+
+            <Text style={styles.fieldLabel}>Telefon raqami</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="+998 90 123 45 67"
+              value={debtorPhone}
+              onChangeText={setDebtorPhone}
+              keyboardType="phone-pad"
+            />
+
+            <Text style={styles.fieldLabel}>Qarz summasi *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="500000"
+              value={debtAmount}
+              onChangeText={setDebtAmount}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.fieldLabel}>To'lash muddati (KK.OO.YYYY) *</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="12.05.2026"
+              value={debtDate}
+              onChangeText={setDebtDate}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddDebtModal(false)}>
+                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, (!debtorName || !debtAmount || !debtDate) && styles.saveBtnDisabled]}
+                onPress={handleAddDebt}
+              >
+                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>Saqlash</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
 
     </View>
 
@@ -1004,6 +1212,33 @@ const styles = StyleSheet.create({
     borderColor: '#eee',
     ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
+  totalDisplay: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    color: '#1A1A1A',
+    marginBottom: 24,
+    backgroundColor: '#f8f8f8',
+    padding: 12,
+    borderRadius: 12,
+  },
+  paymentOptions: {
+    gap: 12,
+  },
+  payOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  payOptionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
 
   badgeWarning: {
     backgroundColor: '#FFF8E1',
@@ -1357,6 +1592,42 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A1A1A',
   },
+  totalBanner: {
+    backgroundColor: '#F8F9FA',
+    padding: 20,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  totalBannerLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  totalBannerValue: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
+  paymentOptions: {
+    gap: 12,
+  },
+  payOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRadius: 16,
+    gap: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)',
+  },
+  payOptionText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
