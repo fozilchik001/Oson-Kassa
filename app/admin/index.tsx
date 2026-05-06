@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -85,6 +85,26 @@ export default function AdminDashboard() {
 
   // Inventory state
   const [inventory, setInventory] = useState(INITIAL_PRODUCTS);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const saved = localStorage.getItem('products');
+      if (saved) {
+        try {
+          setInventory(JSON.parse(saved));
+        } catch (e) {
+          console.error('Failed to parse inventory', e);
+        }
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem('products', JSON.stringify(inventory));
+    }
+  }, [inventory]);
+
   const [showAddProdModal, setShowAddProdModal] = useState(false);
   const [prodName, setProdName] = useState('');
   const [prodCategory, setProdCategory] = useState('Ichimliklar');
@@ -101,8 +121,8 @@ export default function AdminDashboard() {
         ...p,
         name: prodName.trim(),
         category: prodCategory,
-        price: parseInt(prodPrice, 10),
-        stock: parseInt(prodStock, 10),
+        price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
+        stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
         code: prodCode.trim()
       } : p));
     } else {
@@ -110,8 +130,8 @@ export default function AdminDashboard() {
         id: Date.now().toString(),
         name: prodName.trim(),
         category: prodCategory,
-        price: parseInt(prodPrice, 10),
-        stock: parseInt(prodStock, 10),
+        price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
+        stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
         code: prodCode.trim() || Math.floor(Math.random() * 1000000000).toString(),
         image: 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
       };
@@ -261,6 +281,32 @@ export default function AdminDashboard() {
     { id: 3, name: 'Lays Chips 80g', quantity: 42, total: 420000, category: 'Snaklar' },
     { id: 4, name: 'Orbit White', quantity: 30, total: 90000, category: 'Snaklar' },
   ]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const savedStaff = localStorage.getItem('staff');
+      if (savedStaff) setStaff(JSON.parse(savedStaff));
+      
+      const savedExpenses = localStorage.getItem('expenses');
+      if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
+      
+      const savedTransactions = localStorage.getItem('transactions');
+      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
+      
+      const savedSalesItems = localStorage.getItem('salesItems');
+      if (savedSalesItems) setSalesItems(JSON.parse(savedSalesItems));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem('staff', JSON.stringify(staff));
+      localStorage.setItem('expenses', JSON.stringify(expenses));
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+      localStorage.setItem('salesItems', JSON.stringify(salesItems));
+    }
+  }, [staff, expenses, transactions, salesItems]);
+
 
   const [chartPeriod, setChartPeriod] = useState('Haftalik');
 
@@ -784,6 +830,16 @@ export default function AdminDashboard() {
           </View>
         </View>
         <View style={styles.analyticsStatCard}>
+          <Text style={styles.analyticsStatLabel}>Ombor qoldig'i</Text>
+          <Text style={styles.analyticsStatValue}>
+            {inventory.reduce((sum, p) => sum + p.stock, 0).toLocaleString()} ta
+          </Text>
+          <View style={styles.analyticsTrend}>
+            <Ionicons name="cube-outline" size={14} color="#666" />
+            <Text style={styles.analyticsTrendText}>Jami mahsulotlar soni</Text>
+          </View>
+        </View>
+        <View style={styles.analyticsStatCard}>
           <Text style={styles.analyticsStatLabel}>O'rtacha chek</Text>
           <Text style={styles.analyticsStatValue}>85,000 so'm</Text>
           <View style={styles.analyticsTrend}>
@@ -1066,16 +1122,29 @@ export default function AdminDashboard() {
             <View style={styles.settingItem}>
                <View>
                  <Text style={styles.settingLabel}>Do'kon nomi</Text>
-                 <TextInput style={styles.settingInput} defaultValue="Oson Kassa POS" />
+                 <TextInput 
+                   style={styles.settingInput} 
+                   defaultValue={Platform.OS === 'web' ? localStorage.getItem('shopName') || 'Oson Kassa POS' : 'Oson Kassa POS'} 
+                   onChangeText={(val) => {
+                     if (Platform.OS === 'web') localStorage.setItem('shopName', val);
+                   }}
+                 />
                </View>
             </View>
             <View style={styles.settingItem}>
                <View>
-                 <Text style={styles.settingLabel}>Valyuta</Text>
-                 <TextInput style={styles.settingInput} defaultValue="O'zbek so'mi (UZS)" />
+                 <Text style={styles.settingLabel}>Admin paroli</Text>
+                 <TextInput 
+                   style={styles.settingInput} 
+                   defaultValue={Platform.OS === 'web' ? localStorage.getItem('adminPassword') || '' : ''} 
+                   onChangeText={(val) => {
+                     if (Platform.OS === 'web') localStorage.setItem('adminPassword', val);
+                   }}
+                   secureTextEntry
+                 />
                </View>
             </View>
-            <TouchableOpacity style={styles.saveSettingsBtn}>
+            <TouchableOpacity style={styles.saveSettingsBtn} onPress={() => alert('Sozlamalar saqlandi!')}>
                <Text style={styles.saveSettingsText}>Saqlash</Text>
             </TouchableOpacity>
           </View>
@@ -1336,6 +1405,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 12,
     fontSize: 15,
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   iconBtn: {
     width: 52,
@@ -1714,6 +1784,7 @@ const styles = StyleSheet.create({
     flex: 1,
     marginLeft: 8,
     fontSize: 14,
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   emptyState: {
     padding: 100,
@@ -1745,6 +1816,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#eee',
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   saveSettingsBtn: {
     backgroundColor: '#E31E24',
@@ -1955,6 +2027,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#eee',
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   fieldLabel: {
     fontSize: 14,

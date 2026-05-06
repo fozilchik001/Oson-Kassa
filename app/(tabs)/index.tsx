@@ -2,7 +2,7 @@
 import { CATEGORIES, PRODUCTS as INITIAL_PRODUCTS } from '@/constants/PosData';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import {
   Dimensions,
   Modal,
@@ -24,6 +24,11 @@ export default function PosScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activePage, setActivePage] = useState('Sotuv');
+
+  // Auth state
+  const [showAdminAuthModal, setShowAdminAuthModal] = useState(false);
+  const [adminAuthPassword, setAdminAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
   
   // Sotuv page state
   const [selectedCategory, setSelectedCategory] = useState('all');
@@ -32,6 +37,35 @@ export default function PosScreen() {
 
   // Products state (local, so we can add)
   const [products, setProducts] = useState<any[]>(INITIAL_PRODUCTS);
+
+  useEffect(() => {
+    const loadProducts = () => {
+      if (Platform.OS === 'web') {
+        const saved = localStorage.getItem('products');
+        if (saved) {
+          try {
+            setProducts(JSON.parse(saved));
+          } catch (e) {
+            console.error('Failed to parse products', e);
+          }
+        }
+      }
+    };
+
+    loadProducts();
+
+    if (Platform.OS === 'web') {
+      window.addEventListener('focus', loadProducts);
+      return () => window.removeEventListener('focus', loadProducts);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem('products', JSON.stringify(products));
+    }
+  }, [products]);
+
 
   // Add Product Modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -50,6 +84,24 @@ export default function PosScreen() {
   ]);
 
   const [totalPaidAmount, setTotalPaidAmount] = useState(850000);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const savedDebtors = localStorage.getItem('debtors');
+      if (savedDebtors) setDebtors(JSON.parse(savedDebtors));
+      
+      const savedPaidAmount = localStorage.getItem('totalPaidAmount');
+      if (savedPaidAmount) setTotalPaidAmount(parseInt(savedPaidAmount, 10));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      localStorage.setItem('debtors', JSON.stringify(debtors));
+      localStorage.setItem('totalPaidAmount', totalPaidAmount.toString());
+    }
+  }, [debtors, totalPaidAmount]);
+
 
   const handlePayDebt = (id: number) => {
     const debtToPay = debtors.find(d => d.id === id);
@@ -119,8 +171,8 @@ export default function PosScreen() {
       id: String(Date.now()),
       name: newName.trim(),
       category: newCategory,
-      price: parseInt(newPrice.replace(/\D/g, ''), 10) || 0,
-      stock: parseInt(newStock, 10) || 0,
+      price: parseInt(newPrice.toString().replace(/\D/g, ''), 10) || 0,
+      stock: parseInt(newStock.toString().replace(/\D/g, ''), 10) || 0,
       code: newBarcode.trim() || String(Math.floor(Math.random() * 900000000 + 100000000)),
       image: newImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(newName)}&background=E31E24&color=fff&size=200`,
     };
@@ -133,6 +185,21 @@ export default function PosScreen() {
     setNewImage(null);
     setShowAddModal(false);
   };
+
+  const handleAdminAuth = () => {
+    if (Platform.OS === 'web') {
+      const savedPassword = localStorage.getItem('adminPassword');
+      if (adminAuthPassword === savedPassword) {
+        setShowAdminAuthModal(false);
+        setAdminAuthPassword('');
+        setAuthError('');
+        router.push('/admin');
+      } else {
+        setAuthError('Noto\'g\'ri parol!');
+      }
+    }
+  };
+
 
   // Edit Product Modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -182,9 +249,17 @@ export default function PosScreen() {
   }, [products, selectedCategory, searchQuery]);
 
   const addToCart = (product: any) => {
+    if (product.stock <= 0) {
+      alert('Mahsulot omborda qolmagan!');
+      return;
+    }
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
+        if (existing.quantity >= product.stock) {
+          alert(`Omborda faqat ${product.stock} ta mahsulot bor!`);
+          return prev;
+        }
         return prev.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
@@ -196,12 +271,44 @@ export default function PosScreen() {
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === id ? { ...item, quantity: Math.max(0, item.quantity + delta) } : item
-        )
+        .map((item) => {
+          if (item.id === id) {
+            const newQty = item.quantity + delta;
+            if (delta > 0 && newQty > item.stock) {
+              alert(`Omborda faqat ${item.stock} ta mahsulot bor!`);
+              return item;
+            }
+            return { ...item, quantity: Math.max(0, newQty) };
+          }
+          return item;
+        })
         .filter((item) => item.quantity > 0)
     );
   };
+
+  const handleCheckout = () => {
+    if (cart.length === 0) return;
+    
+    // Update products stock
+    setProducts(prev => {
+      const newProducts = prev.map(p => {
+        const cartItem = cart.find(item => item.id === p.id);
+        if (cartItem) {
+          return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
+        }
+        return p;
+      });
+      
+      if (Platform.OS === 'web') {
+        localStorage.setItem('products', JSON.stringify(newProducts));
+      }
+      return newProducts;
+    });
+    
+    alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+    setCart([]);
+  };
+
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
@@ -277,14 +384,19 @@ export default function PosScreen() {
                         <Text style={styles.productPrice}>{p.price.toLocaleString()} so'm</Text>
                         <View style={styles.stockInfo}>
                           <Text style={styles.stockLabel}>Omborda: </Text>
-                          <Text style={[styles.stockValue, p.stock < 10 && styles.stockLow]}>
+                          <Text style={[styles.stockValue, p.stock <= 0 && styles.stockLow]}>
                             {p.stock} ta
                           </Text>
                         </View>
                       </View>
-                      <TouchableOpacity style={styles.addBtn} onPress={() => addToCart(p)}>
+                      <TouchableOpacity 
+                        style={[styles.addBtn, p.stock <= 0 && styles.addBtnDisabled]} 
+                        onPress={() => addToCart(p)}
+                        disabled={p.stock <= 0}
+                      >
                         <Ionicons name="add" size={20} color="#fff" />
                       </TouchableOpacity>
+
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -340,7 +452,7 @@ export default function PosScreen() {
                   <Ionicons name="trash-outline" size={20} color="#E31E24" />
                   <Text style={styles.clearAllText}>Tozalash</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.checkoutBtn}>
+                <TouchableOpacity style={styles.checkoutBtn} onPress={handleCheckout}>
                   <View style={styles.checkoutInfo}>
                     <Text style={styles.checkoutLabel}>To'lov</Text>
                     <Text style={styles.checkoutTotal}>{total.toLocaleString()} so'm</Text>
@@ -349,6 +461,7 @@ export default function PosScreen() {
                     <Ionicons name="arrow-forward" size={24} color="#E31E24" />
                   </View>
                 </TouchableOpacity>
+
               </View>
             </View>
           </>
@@ -540,10 +653,20 @@ export default function PosScreen() {
           <NavItem icon="cart" label="Sotuv" active={activePage === 'Sotuv'} onPress={() => setActivePage('Sotuv')} />
           <NavItem icon="people-outline" label="Qarzdorlar" active={activePage === 'Qarzdorlar'} onPress={() => setActivePage('Qarzdorlar')} />
           <View style={{ height: 1, backgroundColor: '#eee', marginVertical: 10, marginHorizontal: 20 }} />
-          <NavItem icon="shield-checkmark-outline" label="Admin Panel" onPress={() => router.push('/admin')} />
+          <NavItem icon="shield-checkmark-outline" label="Admin Panel" onPress={() => setShowAdminAuthModal(true)} />
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn}>
+        <TouchableOpacity 
+          style={styles.logoutBtn}
+          onPress={() => {
+            if (Platform.OS === 'web') {
+              localStorage.removeItem('isRegistered');
+              localStorage.removeItem('adminPassword');
+              router.replace('/register');
+            }
+          }}
+        >
+
           <Ionicons name="log-out-outline" size={24} color="#E31E24" />
           <Text style={styles.logoutText}>Chiqish</Text>
         </TouchableOpacity>
@@ -570,7 +693,55 @@ export default function PosScreen() {
         </>
       )}
 
+      {/* Admin Auth Modal */}
+      <Modal
+        visible={showAdminAuthModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAdminAuthModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Admin Paneliga Kirish</Text>
+              <TouchableOpacity onPress={() => setShowAdminAuthModal(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.fieldLabel}>Admin parolini kiriting</Text>
+            <View style={[styles.inputWrapper, authError ? { borderColor: '#E31E24' } : null]}>
+              <Ionicons name="lock-closed-outline" size={20} color="#666" style={{ marginRight: 10 }} />
+              <TextInput
+                style={styles.modalInputNoMargin}
+                placeholder="Parol"
+                value={adminAuthPassword}
+                onChangeText={setAdminAuthPassword}
+                secureTextEntry
+                autoFocus
+              />
+            </View>
+            
+            {authError ? <Text style={styles.errorTextSmall}>{authError}</Text> : null}
+
+            <View style={[styles.modalActions, { marginTop: 20 }]}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAdminAuthModal(false)}>
+                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleAdminAuth}
+              >
+                <Text style={styles.saveBtnText}>Kirish</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
+
   );
 }
 
@@ -798,6 +969,43 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   badgeWarning: {
+    backgroundColor: '#FFF3E0',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#eee',
+    paddingHorizontal: 16,
+  },
+  modalInputNoMargin: {
+    flex: 1,
+    height: 52,
+    fontSize: 16,
+    color: '#1A1A1A',
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
+  },
+  errorTextSmall: {
+    color: '#E31E24',
+    fontSize: 12,
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  modalInput: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: '#1A1A1A',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#eee',
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
+  },
+
+  badgeWarning: {
     backgroundColor: '#FFF8E1',
   },
   badgeWarningText: {
@@ -867,6 +1075,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   filterBtn: {
     width: 52,
@@ -974,6 +1183,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  addBtnDisabled: {
+    backgroundColor: '#ccc',
+  },
+
 
   cartPanel: {
     width: 350,
@@ -1245,6 +1458,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#1A1A1A',
     letterSpacing: 1,
+    ...Platform.select({ web: { outlineStyle: 'none' } as any, default: {} }),
   },
   barcodeGenBtn: {
     width: 36,
