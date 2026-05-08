@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,40 @@ export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('Hisobotlar');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  const [adminName, setAdminName] = useState('Administrator');
+  const [adminAvatar, setAdminAvatar] = useState('https://ui-avatars.com/api/?name=Admin&background=E31E24&color=fff');
+  const avatarInputRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const savedName = localStorage.getItem('adminName');
+      if (savedName) setAdminName(savedName);
+      const savedAvatar = localStorage.getItem('adminAvatar');
+      if (savedAvatar) setAdminAvatar(savedAvatar);
+    }
+  }, []);
+
+  const handlePickAvatar = () => {
+    if (Platform.OS === 'web') {
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+        avatarInputRef.current.onchange = (e: any) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const result = ev.target?.result as string;
+            setAdminAvatar(result);
+            localStorage.setItem('adminAvatar', result);
+          };
+          reader.readAsDataURL(file);
+        };
+        avatarInputRef.current.click();
+      }
+    }
+  };
 
   // Staff state
   const [staff, setStaff] = useState(() => {
@@ -1145,6 +1179,38 @@ export default function AdminDashboard() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Tizim sozlamalari</Text>
             <View style={styles.settingItem}>
+               <Text style={styles.settingLabel}>Profil rasmi</Text>
+               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                 <Image source={{ uri: adminAvatar }} style={{ width: 64, height: 64, borderRadius: 32 }} />
+                 <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: '#F0F0F0' }]} onPress={handlePickAvatar}>
+                   <Ionicons name="camera-outline" size={20} color="#333" />
+                   <Text style={[styles.primaryBtnText, { color: '#333' }]}>Rasm yuklash</Text>
+                 </TouchableOpacity>
+               </View>
+            </View>
+            <View style={styles.settingItem}>
+               <View>
+                 <Text style={styles.settingLabel}>Admin ismi</Text>
+                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                   <TextInput 
+                     style={[styles.settingInput, { flex: 1, marginBottom: 0, backgroundColor: isEditingProfile ? '#fff' : '#F8F9FA' }]} 
+                     value={adminName} 
+                     editable={isEditingProfile}
+                     onChangeText={(val) => {
+                       setAdminName(val);
+                       if (Platform.OS === 'web') localStorage.setItem('adminName', val);
+                     }}
+                   />
+                   <TouchableOpacity 
+                     style={{ padding: 12, backgroundColor: isEditingProfile ? '#E8F5E9' : '#F0F0F0', borderRadius: 8 }}
+                     onPress={() => setIsEditingProfile(!isEditingProfile)}
+                   >
+                     <Ionicons name={isEditingProfile ? "checkmark" : "pencil-outline"} size={20} color={isEditingProfile ? "#28A745" : "#333"} />
+                   </TouchableOpacity>
+                 </View>
+               </View>
+            </View>
+            <View style={styles.settingItem}>
                <View>
                  <Text style={styles.settingLabel}>Do'kon nomi</Text>
                  <TextInput 
@@ -1171,6 +1237,28 @@ export default function AdminDashboard() {
             </View>
             <TouchableOpacity style={styles.saveSettingsBtn} onPress={() => alert('Sozlamalar saqlandi!')}>
                <Text style={styles.saveSettingsText}>Saqlash</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.saveSettingsBtn, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E31E24', marginTop: 16 }]} 
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  localStorage.removeItem('isRegistered');
+                }
+                router.replace('/register');
+              }}
+            >
+               <Text style={[styles.saveSettingsText, { color: '#E31E24' }]}>Tizimdan chiqish</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.saveSettingsBtn, { backgroundColor: '#FFEBEE', borderWidth: 1, borderColor: '#E31E24', marginTop: 16 }]} 
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  localStorage.clear();
+                }
+                router.replace('/register');
+              }}
+            >
+               <Text style={[styles.saveSettingsText, { color: '#E31E24' }]}>Profilni o'chirish</Text>
             </TouchableOpacity>
           </View>
         );
@@ -1260,18 +1348,6 @@ export default function AdminDashboard() {
               <Ionicons name="search-outline" size={20} color="#999" />
               <TextInput placeholder="Qidirish..." style={styles.searchInput} />
             </View>
-            <TouchableOpacity style={styles.iconBtn}>
-              <Ionicons name="notifications-outline" size={24} color="#333" />
-              <View style={styles.notifBadge} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.profileBtn}>
-              <Image 
-                source="https://ui-avatars.com/api/?name=Admin&background=E31E24&color=fff" 
-                style={styles.avatar}
-              />
-              <Text style={styles.profileText}>Administrator</Text>
-              <Ionicons name="chevron-down" size={16} color="#333" />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -1279,6 +1355,14 @@ export default function AdminDashboard() {
           {renderContent()}
         </ScrollView>
       </View>
+      {Platform.OS === 'web' && (
+        <input
+          ref={avatarInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' } as any}
+        />
+      )}
     </View>
   );
 }
