@@ -79,6 +79,27 @@ export default function AdminDashboard() {
   const [staffRole, setStaffRole] = useState('Kassir');
   const [staffPhone, setStaffPhone] = useState('');
   const [editingStaffId, setEditingStaffId] = useState<number | null>(null);
+  const [staffImage, setStaffImage] = useState<string | null>(null);
+  const staffImageInputRef = useRef<any>(null);
+
+  const handlePickStaffImage = () => {
+    if (Platform.OS === 'web') {
+      if (staffImageInputRef.current) {
+        staffImageInputRef.current.value = '';
+        staffImageInputRef.current.onchange = (e: any) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const result = ev.target?.result as string;
+            setStaffImage(result);
+          };
+          reader.readAsDataURL(file);
+        };
+        staffImageInputRef.current.click();
+      }
+    }
+  };
 
   const handleSaveStaff = () => {
     if (!staffName.trim() || !staffPhone.trim()) return;
@@ -88,7 +109,8 @@ export default function AdminDashboard() {
         ...s,
         name: staffName.trim(),
         role: staffRole,
-        phone: staffPhone.trim()
+        phone: staffPhone.trim(),
+        image: staffImage
       } : s));
     } else {
       const newPerson = {
@@ -97,6 +119,7 @@ export default function AdminDashboard() {
         role: staffRole,
         phone: staffPhone.trim(),
         status: 'Faol',
+        image: staffImage
       };
       setStaff(prev => [...prev, newPerson]);
     }
@@ -108,6 +131,7 @@ export default function AdminDashboard() {
     setStaffName('');
     setStaffPhone('');
     setStaffRole('Kassir');
+    setStaffImage(null);
     setEditingStaffId(null);
     setShowAddStaffModal(false);
   };
@@ -117,6 +141,7 @@ export default function AdminDashboard() {
     setStaffName(person.name);
     setStaffRole(person.role);
     setStaffPhone(person.phone);
+    setStaffImage(person.image || null);
     setShowAddStaffModal(true);
   };
 
@@ -152,6 +177,27 @@ export default function AdminDashboard() {
   const [prodStock, setProdStock] = useState('');
   const [prodCode, setProdCode] = useState('');
   const [editingProdId, setEditingProdId] = useState<string | null>(null);
+  const [prodImage, setProdImage] = useState<string | null>(null);
+  const prodImageInputRef = useRef<any>(null);
+
+  const handlePickProdImage = () => {
+    if (Platform.OS === 'web') {
+      if (prodImageInputRef.current) {
+        prodImageInputRef.current.value = '';
+        prodImageInputRef.current.onchange = (e: any) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const result = ev.target?.result as string;
+            setProdImage(result);
+          };
+          reader.readAsDataURL(file);
+        };
+        prodImageInputRef.current.click();
+      }
+    }
+  };
 
   const handleSaveProduct = () => {
     if (!prodName.trim() || !prodPrice.trim() || !prodStock.trim()) return;
@@ -163,7 +209,8 @@ export default function AdminDashboard() {
         category: prodCategory,
         price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
         stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
-        code: prodCode.trim()
+        code: prodCode.trim(),
+        image: prodImage || p.image
       } : p));
     } else {
       const newProd = {
@@ -173,7 +220,7 @@ export default function AdminDashboard() {
         price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
         stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
         code: prodCode.trim() || Math.floor(Math.random() * 1000000000).toString(),
-        image: 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
+        image: prodImage || 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
       };
       setInventory(prev => [newProd, ...prev]);
     }
@@ -186,6 +233,7 @@ export default function AdminDashboard() {
     setProdStock('');
     setProdCode('');
     setProdCategory('Ichimliklar');
+    setProdImage(null);
     setEditingProdId(null);
     setShowAddProdModal(false);
   };
@@ -197,6 +245,7 @@ export default function AdminDashboard() {
     setProdPrice(p.price.toString());
     setProdStock(p.stock.toString());
     setProdCode(p.code);
+    setProdImage(p.image || null);
     setShowAddProdModal(true);
   };
 
@@ -542,6 +591,27 @@ export default function AdminDashboard() {
               </TouchableOpacity>
             </View>
 
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <TouchableOpacity onPress={handlePickStaffImage} style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#eee', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                {staffImage ? (
+                  <Image source={{ uri: staffImage }} style={{ width: 80, height: 80 }} />
+                ) : (
+                  <>
+                    <Ionicons name="camera" size={24} color="#999" />
+                    <Text style={{ fontSize: 10, color: '#999', marginTop: 4 }}>Rasm</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {Platform.OS === 'web' && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={staffImageInputRef}
+                  style={{ display: 'none' }}
+                />
+              )}
+            </View>
+
             <Text style={styles.fieldLabel}>F.I.O *</Text>
             <TextInput
               style={styles.modalInput}
@@ -597,9 +667,13 @@ export default function AdminDashboard() {
       {staff.map(person => (
         <View key={person.id} style={styles.tr}>
           <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-            <View style={styles.miniAvatar}>
-              <Text style={styles.miniAvatarText}>{person.name.charAt(0)}</Text>
-            </View>
+            {person.image ? (
+              <Image source={{ uri: person.image }} style={{ width: 36, height: 36, borderRadius: 18 }} />
+            ) : (
+              <View style={styles.miniAvatar}>
+                <Text style={styles.miniAvatarText}>{person.name.charAt(0)}</Text>
+              </View>
+            )}
             <Text style={styles.tdTextBold}>{person.name}</Text>
           </View>
           <Text style={[styles.td, { flex: 1 }]}>{person.role}</Text>
@@ -652,6 +726,27 @@ export default function AdminDashboard() {
               <TouchableOpacity onPress={resetProdForm}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
+            </View>
+
+            <View style={{ alignItems: 'center', marginBottom: 20 }}>
+              <TouchableOpacity onPress={handlePickProdImage} style={{ width: 100, height: 100, borderRadius: 16, backgroundColor: '#F8F9FA', borderWidth: 1, borderColor: '#eee', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                {prodImage ? (
+                  <Image source={{ uri: prodImage }} style={{ width: 100, height: 100 }} />
+                ) : (
+                  <>
+                    <Ionicons name="image-outline" size={32} color="#999" />
+                    <Text style={{ fontSize: 12, color: '#999', marginTop: 8 }}>Rasm</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {Platform.OS === 'web' && (
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={prodImageInputRef}
+                  style={{ display: 'none' }}
+                />
+              )}
             </View>
 
             <Text style={styles.fieldLabel}>Mahsulot nomi *</Text>
