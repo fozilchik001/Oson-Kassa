@@ -11,7 +11,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -23,8 +23,17 @@ const IS_DESKTOP = width > 1024;
 export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Hisobotlar');
+  const params = useLocalSearchParams();
+  const [activeTab, setActiveTab] = useState((params.tab as string) || 'Hisobotlar');
+
+  useEffect(() => {
+    if (params.tab) {
+      setActiveTab(params.tab as string);
+    }
+  }, [params.tab]);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const [adminName, setAdminName] = useState('Administrator');
   const [adminAvatar, setAdminAvatar] = useState('https://ui-avatars.com/api/?name=Admin&background=E31E24&color=fff');
@@ -497,7 +506,7 @@ export default function AdminDashboard() {
         <View style={[styles.card, styles.activityCard]}>
           <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>So'nggi savdolar</Text>
-            <TouchableOpacity onPress={() => setActiveTab('Sales')}>
+            <TouchableOpacity onPress={() => router.push('/admin/sales')}>
               <Text style={styles.cardLink}>Barchasi</Text>
             </TouchableOpacity>
           </View>
@@ -558,7 +567,15 @@ export default function AdminDashboard() {
         <View style={styles.actionGrid}>
            <QuickAction icon="add-circle-outline" label="Mahsulot qo'shish" color="#E31E24" onPress={() => setActiveTab('Inventory')} />
            <QuickAction icon="person-add-outline" label="Sotuvchi qo'shish" color="#E31E24" onPress={() => setActiveTab('Staff')} />
-           <QuickAction icon="print-outline" label="Hisobot chiqarish" color="#E31E24" onPress={() => alert('Hisobot Excel formatida yuklab olindi')} />
+           <QuickAction 
+             icon="print-outline" 
+             label="Hisobot chiqarish" 
+             color="#E31E24" 
+             onPress={() => {
+               setSuccessMessage('Hisobot Excel formatida muvaffaqiyatli yuklab olindi!');
+               setShowSuccessModal(true);
+             }} 
+           />
            <QuickAction icon="settings-outline" label="Tizim sozlamalari" color="#E31E24" onPress={() => setActiveTab('Settings')} />
         </View>
       </View>
@@ -1075,10 +1092,7 @@ export default function AdminDashboard() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>Savdo tarixi</Text>
-        <View style={styles.datePicker}>
-          <Ionicons name="calendar-outline" size={18} color="#666" />
-          <Text style={styles.dateText}>04.05.2026 - 04.05.2026</Text>
-        </View>
+
       </View>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { flex: 1 }]}>ID</Text>
@@ -1087,19 +1101,19 @@ export default function AdminDashboard() {
         <Text style={[styles.th, { flex: 1 }]}>To'lov</Text>
         <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Summa</Text>
       </View>
-      {[...Array(8)].map((_, i) => (
-        <View key={i} style={styles.tr}>
-          <Text style={[styles.td, { flex: 1, color: '#999' }]}>#100{8-i}</Text>
-          <Text style={[styles.td, { flex: 1.5, fontWeight: '600' }]}>Mijoz #{Math.floor(Math.random() * 50 + 1)}</Text>
-          <Text style={[styles.td, { flex: 1 }]}>10:{Math.floor(Math.random() * 50 + 10)}</Text>
+      {transactions.map((t, i) => (
+        <View key={t.id} style={styles.tr}>
+          <Text style={[styles.td, { flex: 1, color: '#999' }]}>#{t.id}</Text>
+          <Text style={[styles.td, { flex: 1.5, fontWeight: '600' }]}>{t.customer}</Text>
+          <Text style={[styles.td, { flex: 1 }]}>{t.time}</Text>
           <View style={[styles.td, { flex: 1 }]}>
-             <View style={[styles.badge, i % 2 === 0 ? styles.badgeSuccess : styles.badgeInfo]}>
-                <Text style={[styles.badgeText, i % 2 === 0 ? styles.badgeSuccessText : styles.badgeInfoText]}>
-                  {i % 2 === 0 ? 'Naqd' : 'Karta'}
+             <View style={[styles.badge, t.method === 'Naqd' ? styles.badgeSuccess : styles.badgeInfo]}>
+                <Text style={[styles.badgeText, t.method === 'Naqd' ? styles.badgeSuccessText : styles.badgeInfoText]}>
+                  {t.method}
                 </Text>
              </View>
           </View>
-          <Text style={[styles.td, { flex: 1.5, textAlign: 'right', fontWeight: 'bold' }]}>{(Math.floor(Math.random() * 200 + 20) * 1000).toLocaleString()} so'm</Text>
+          <Text style={[styles.td, { flex: 1.5, textAlign: 'right', fontWeight: 'bold' }]}>{t.amount.toLocaleString()} so'm</Text>
         </View>
       ))}
     </View>
@@ -1265,6 +1279,7 @@ export default function AdminDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'Hisobotlar': return renderOverview();
+      case 'Sales': return renderSales();
       case 'Staff': return renderStaff();
       case 'Inventory': return renderInventory();
       case 'Expenses': return renderExpenses();
@@ -1330,7 +1345,13 @@ export default function AdminDashboard() {
                  />
                </View>
             </View>
-            <TouchableOpacity style={styles.saveSettingsBtn} onPress={() => alert('Sozlamalar saqlandi!')}>
+            <TouchableOpacity 
+              style={styles.saveSettingsBtn} 
+              onPress={() => {
+                setSuccessMessage('Barcha sozlamalar muvaffaqiyatli saqlandi!');
+                setShowSuccessModal(true);
+              }}
+            >
                <Text style={styles.saveSettingsText}>Saqlash</Text>
             </TouchableOpacity>
             <TouchableOpacity 
@@ -1361,6 +1382,33 @@ export default function AdminDashboard() {
     }
   };
 
+  const renderSuccessModal = () => (
+    <Modal
+      visible={showSuccessModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowSuccessModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalBox, { alignItems: 'center', paddingVertical: 40 }]}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+            <Ionicons name="checkmark-circle" size={48} color="#28A745" />
+          </View>
+          <Text style={[styles.modalTitle, { textAlign: 'center', marginBottom: 10 }]}>Muvaffaqiyatli!</Text>
+          <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 }}>
+            {successMessage}
+          </Text>
+          <TouchableOpacity 
+            style={[styles.saveBtn, { width: '80%', flex: 0 }]} 
+            onPress={() => setShowSuccessModal(false)}
+          >
+            <Text style={styles.saveBtnText}>Tushunarli</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   const renderSidebar = () => (
     <View style={styles.sidebar}>
       <View style={styles.logoContainer}>
@@ -1376,6 +1424,12 @@ export default function AdminDashboard() {
           label="Hisobotlar" 
           active={activeTab === 'Hisobotlar'} 
           onPress={() => setActiveTab('Hisobotlar')} 
+        />
+        <SidebarItem 
+          icon="cart-outline" 
+          label="Savdolar" 
+          active={activeTab === 'Sales'} 
+          onPress={() => router.push('/admin/sales')} 
         />
         <SidebarItem 
           icon="people-outline" 
@@ -1430,6 +1484,7 @@ export default function AdminDashboard() {
           <View>
             <Text style={styles.greeting}>
               {activeTab === 'Hisobotlar' ? 'Hisobotlar va Statistika' : 
+               activeTab === 'Sales' ? 'Savdo tarixi' :
                activeTab === 'Staff' ? 'Xodimlar' :
                activeTab === 'Inventory' ? 'Ombor' :
                activeTab === 'Qarzdorlar' ? 'Qarzdorlar' :
@@ -1449,6 +1504,7 @@ export default function AdminDashboard() {
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           {renderContent()}
         </ScrollView>
+        {renderSuccessModal()}
       </View>
       {Platform.OS === 'web' && (
         <input
@@ -1677,6 +1733,7 @@ const styles = StyleSheet.create({
     padding: 24,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.05,
@@ -1689,7 +1746,30 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+  },
+  statIconWrapperRed: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FFEBEE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statIconWrapperGray: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  statIconWrapperGreen: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   statInfo: {
     flex: 1,
