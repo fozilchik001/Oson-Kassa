@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 const IS_DESKTOP = width > 768;
@@ -41,14 +42,9 @@ export default function PosScreen() {
 
 
 
-  // Products state (local, so we can add)
-  const [products, setProducts] = useState<any[]>(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('products');
-      if (saved) return JSON.parse(saved);
-    }
-    return INITIAL_PRODUCTS;
-  });
+  // Products state
+  const [products, setProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadProducts = () => {
@@ -88,39 +84,65 @@ export default function PosScreen() {
   const [newImage, setNewImage] = useState<string | null>(null);
 
   // Debtors state
-  const [debtors, setDebtors] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('debtors');
-      if (saved) return JSON.parse(saved);
-    }
-    return [
-      { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
-      { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
-      { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
-    ];
-  });
+  const [debtors, setDebtors] = useState<any[]>([]);
 
-  const [totalPaidAmount, setTotalPaidAmount] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('totalPaidAmount');
-      if (saved) return parseInt(saved, 10);
+  const [totalPaidAmount, setTotalPaidAmount] = useState(0);
+
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    setIsLoading(true);
+    try {
+      // Fetch Products
+      const { data: prods, error: prodErr } = await supabase
+        .from('products')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      if (prodErr) throw prodErr;
+      if (prods) setProducts(prods);
+
+      // Fetch Debtors
+      const { data: dbt, error: dbtErr } = await supabase
+        .from('debtors')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (dbtErr) throw dbtErr;
+      if (dbt) setDebtors(dbt);
+
+    } catch (err) {
+      console.error('Supabase load error:', err);
+      // Fallback to initial products only if everything fails and we have no products
+      if (products.length === 0) {
+        setProducts(INITIAL_PRODUCTS);
+      }
+    } finally {
+      setIsLoading(false);
     }
-    return 850000;
-  });
+  };
 
   useEffect(() => {
     if (Platform.OS === 'web') {
+      localStorage.setItem('products', JSON.stringify(products));
       localStorage.setItem('debtors', JSON.stringify(debtors));
       localStorage.setItem('totalPaidAmount', totalPaidAmount.toString());
     }
-  }, [debtors, totalPaidAmount]);
+  }, [products, debtors, totalPaidAmount]);
 
 
 
-  const handlePayDebt = (id: number) => {
+  const handlePayDebt = async (id: number) => {
     const debtToPay = debtors.find(d => d.id === id);
     if (debtToPay) {
       setTotalPaidAmount(prev => prev + debtToPay.amount);
+      const { error } = await supabase.from('debtors').delete().eq('id', id);
+      if (error) {
+        console.error('Error paying debt:', error);
+        return;
+      }
     }
     setDebtors(prev => prev.filter(d => d.id !== id));
   };
@@ -132,7 +154,7 @@ export default function PosScreen() {
   const [debtAmount, setDebtAmount] = useState('');
   const [debtDate, setDebtDate] = useState('');
 
-  const handleAddDebt = () => {
+  const handleAddDebt = async () => {
     if (!debtorName.trim() || !debtAmount.trim() || !debtDate.trim()) return;
     
     // Check if overdue
@@ -143,7 +165,6 @@ export default function PosScreen() {
     const isOver = deadlineDate < today;
 
     const newDebt = {
-      id: Date.now(),
       name: debtorName.trim(),
       phone: debtorPhone.trim(),
       amount: parseInt(debtAmount.replace(/\D/g, ''), 10) || 0,
@@ -151,12 +172,22 @@ export default function PosScreen() {
       over: isOver,
     };
 
-    setDebtors(prev => [...prev, newDebt]);
-    setDebtorName('');
-    setDebtorPhone('');
-    setDebtAmount('');
-    setDebtDate('');
-    setShowAddDebtModal(false);
+    const { data, error } = await supabase.from('debtors').insert([newDebt]).select();
+    
+    if (error) {
+      console.error('Error adding debt:', error);
+      alert('Qarzni saqlashda xatolik yuz berdi');
+      return;
+    }
+
+    if (data) {
+      setDebtors(prev => [data[0], ...prev]);
+      setDebtorName('');
+      setDebtorPhone('');
+      setDebtAmount('');
+      setDebtDate('');
+      setShowAddDebtModal(false);
+    }
   };
 
   // File input ref for web image picking
@@ -179,10 +210,9 @@ export default function PosScreen() {
     }
   };
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!newName.trim() || !newPrice.trim() || !newStock.trim()) return;
-    const newProduct = {
-      id: String(Date.now()),
+    const productData = {
       name: newName.trim(),
       category: newCategory,
       price: parseInt(newPrice.toString().replace(/\D/g, ''), 10) || 0,
@@ -190,14 +220,25 @@ export default function PosScreen() {
       code: newBarcode.trim() || String(Math.floor(Math.random() * 900000000 + 100000000)),
       image: newImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(newName)}&background=E31E24&color=fff&size=200`,
     };
-    setProducts(prev => [...prev, newProduct]);
-    setNewName('');
-    setNewCategory('Ichimliklar');
-    setNewPrice('');
-    setNewStock('');
-    setNewBarcode('');
-    setNewImage(null);
-    setShowAddModal(false);
+
+    const { data, error } = await supabase.from('products').insert([productData]).select();
+
+    if (error) {
+      console.error('Error adding product:', error);
+      alert('Mahsulotni saqlashda xatolik yuz berdi');
+      return;
+    }
+
+    if (data) {
+      setProducts(prev => [...prev, data[0]]);
+      setNewName('');
+      setNewCategory('Ichimliklar');
+      setNewPrice('');
+      setNewStock('');
+      setNewBarcode('');
+      setNewImage(null);
+      setShowAddModal(false);
+    }
   };
 
   const handleAdminAuth = () => {
@@ -236,23 +277,31 @@ export default function PosScreen() {
     setShowEditModal(true);
   };
 
-  const handleEditProduct = () => {
-    if (!editName.trim() || !editPrice.trim() || !editStock.trim()) return;
+  const handleEditProduct = async () => {
+    if (!editName.trim() || !editPrice.trim() || !editStock.trim() || !editId) return;
+    
+    const updatedData = {
+      name: editName.trim(),
+      category: editCategory,
+      price: parseInt(editPrice.replace(/\D/g, ''), 10) || 0,
+      stock: parseInt(editStock, 10) || 0,
+      code: editBarcode.trim(),
+      image: editImage,
+    };
+
+    const { error } = await supabase.from('products').update(updatedData).eq('id', editId);
+
+    if (error) {
+      console.error('Error updating product:', error);
+      alert('Mahsulotni tahrirlashda xatolik yuz berdi');
+      return;
+    }
+
     setProducts(prev => prev.map(p =>
-      p.id === editId
-        ? {
-            ...p,
-            name: editName.trim(),
-            category: editCategory,
-            price: parseInt(editPrice.replace(/\D/g, ''), 10) || 0,
-            stock: parseInt(editStock, 10) || 0,
-            code: editBarcode.trim() || p.code,
-            image: editImage || p.image,
-          }
-        : p
+      p.id === editId ? { ...p, ...updatedData } : p
     ));
     setShowEditModal(false);
-  };;
+  };
 
   const filteredProducts = useMemo(() => {
     return products.filter((p) => {
@@ -305,7 +354,7 @@ export default function PosScreen() {
     setShowPaymentModal(true);
   };
 
-  const completeSale = (method: string, splitData?: { cash: number, card: number }) => {
+  const completeSale = async (method: string, splitData?: { cash: number, card: number }) => {
     if (method === 'Qarz') {
       setShowPaymentModal(false);
       setDebtorName('');
@@ -322,39 +371,53 @@ export default function PosScreen() {
       return;
     }
 
-    const newProducts = products.map(p => {
-      const cartItem = cart.find(item => item.id === p.id);
-      if (cartItem) {
-        return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
-      }
-      return p;
-    });
-    
-    setProducts(newProducts);
+    // Update Stock in Supabase and Local
+    try {
+      const updatePromises = cart.map(item => {
+        const product = products.find(p => p.id === item.id);
+        if (product) {
+          const newStock = Math.max(0, product.stock - item.quantity);
+          return supabase.from('products').update({ stock: newStock }).eq('id', item.id);
+        }
+        return Promise.resolve({ error: null });
+      });
 
-    // Record Transaction for Admin
-    if (Platform.OS === 'web') {
-      const savedTransactions = localStorage.getItem('transactions');
-      const transactions = savedTransactions ? JSON.parse(savedTransactions) : [];
+      await Promise.all(updatePromises);
+
+      // Record Transaction for Admin
       const methodLabel = method === 'Aralash' && splitData 
         ? `Aralash (N:${splitData.cash.toLocaleString()} + K:${splitData.card.toLocaleString()})`
         : method;
 
-      const newTransaction = {
-        id: String(Date.now()),
+      const transactionData = {
         customer: 'Mijoz',
         amount: total,
         status: 'Muvaffaqiyatli',
         time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
         method: methodLabel
       };
-      localStorage.setItem('transactions', JSON.stringify([newTransaction, ...transactions]));
-    }
 
-    alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
-    setCart([]);
-    setShowPaymentModal(false);
-    setShowSplitPaymentModal(false);
+      await supabase.from('transactions').insert([transactionData]);
+
+      // Update local products stock
+      const newProducts = products.map(p => {
+        const cartItem = cart.find(item => item.id === p.id);
+        if (cartItem) {
+          return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
+        }
+        return p;
+      });
+      setProducts(newProducts);
+
+      alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+      setCart([]);
+      setShowPaymentModal(false);
+      setShowSplitPaymentModal(false);
+      
+    } catch (err) {
+      console.error('Error completing sale:', err);
+      alert('Sotuvni amalga oshirishda xatolik yuz berdi');
+    }
   };
 
   const handleSplitConfirm = () => {
@@ -676,12 +739,9 @@ export default function PosScreen() {
 
         <TouchableOpacity 
           style={styles.logoutBtn}
-          onPress={() => {
-            if (Platform.OS === 'web') {
-              localStorage.removeItem('isRegistered');
-              localStorage.removeItem('adminPassword');
-              router.replace('/register');
-            }
+          onPress={async () => {
+            await supabase.auth.signOut();
+            router.replace('/login');
           }}
         >
 

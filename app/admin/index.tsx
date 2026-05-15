@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { PRODUCTS as INITIAL_PRODUCTS } from '@/constants/PosData';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 const IS_DESKTOP = width > 1024;
@@ -40,13 +41,53 @@ export default function AdminDashboard() {
   const avatarInputRef = useRef<any>(null);
 
   useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
     if (Platform.OS === 'web') {
       const savedName = localStorage.getItem('adminName');
       if (savedName) setAdminName(savedName);
       const savedAvatar = localStorage.getItem('adminAvatar');
       if (savedAvatar) setAdminAvatar(savedAvatar);
     }
-  }, []);
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user?.user_metadata?.shop_name) {
+      setAdminName(user.user_metadata.shop_name);
+    }
+
+    try {
+      // Fetch Products
+      const { data: prods, error: prodErr } = await supabase.from('products').select('*');
+      if (prods && !prodErr) setInventory(prods);
+
+      // Fetch Staff
+      const { data: stf, error: stfErr } = await supabase.from('staff').select('*');
+      if (stf && !stfErr) setStaff(stf);
+
+      // Fetch Expenses
+      const { data: exp, error: expErr } = await supabase.from('expenses').select('*').order('created_at', { ascending: false });
+      if (expErr) console.error('Expenses load error:', expErr);
+      if (exp && exp.length > 0) {
+        setExpenses(exp);
+        // Temporary debug alert to see column names
+        // console.log('Expense columns:', Object.keys(exp[0]));
+      } else if (exp) {
+        setExpenses(exp);
+      }
+
+      // Fetch Debtors
+      const { data: dbt, error: dbtErr } = await supabase.from('debtors').select('*');
+      if (dbt && !dbtErr) setDebtors(dbt);
+
+      // Fetch Transactions
+      const { data: trx, error: trxErr } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+      if (trx && !trxErr) setTransactions(trx);
+    } catch (err) {
+      console.log('Supabase load error:', err);
+    }
+  };
 
   const handlePickAvatar = () => {
     if (Platform.OS === 'web') {
@@ -69,17 +110,7 @@ export default function AdminDashboard() {
   };
 
   // Staff state
-  const [staff, setStaff] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('staff');
-      if (saved) return JSON.parse(saved);
-    }
-    return [
-      { id: 1, name: 'Sardorbek Amanov', role: 'Kassir', phone: '+998 90 123 45 67', status: 'Faol' },
-      { id: 2, name: 'Zilola Karimova', role: 'Kassir', phone: '+998 93 987 65 43', status: 'Ta\'tilda' },
-      { id: 3, name: 'Bobur Mirzo', role: 'Admin', phone: '+998 97 111 22 33', status: 'Faol' },
-    ];
-  });
+  const [staff, setStaff] = useState<any[]>([]);
 
 
   // Add Staff Modal state
@@ -110,27 +141,25 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleSaveStaff = () => {
+  const handleSaveStaff = async () => {
     if (!staffName.trim() || !staffPhone.trim()) return;
     
+    const staffData = {
+      name: staffName.trim(),
+      role: staffRole,
+      phone: staffPhone.trim(),
+      image: staffImage,
+      status: 'Faol'
+    };
+
     if (editingStaffId) {
-      setStaff(prev => prev.map(s => s.id === editingStaffId ? {
-        ...s,
-        name: staffName.trim(),
-        role: staffRole,
-        phone: staffPhone.trim(),
-        image: staffImage
-      } : s));
+      setStaff(prev => prev.map(s => s.id === editingStaffId ? { ...s, ...staffData } : s));
+      await supabase.from('staff').update(staffData).eq('id', editingStaffId);
     } else {
-      const newPerson = {
-        id: Date.now(),
-        name: staffName.trim(),
-        role: staffRole,
-        phone: staffPhone.trim(),
-        status: 'Faol',
-        image: staffImage
-      };
-      setStaff(prev => [...prev, newPerson]);
+      const { data, error } = await supabase.from('staff').insert([staffData]).select();
+      if (data && !error) {
+        setStaff(prev => [...prev, data[0]]);
+      }
     }
 
     resetStaffForm();
@@ -156,16 +185,12 @@ export default function AdminDashboard() {
 
   const handleDeleteStaff = (id: number) => {
     setStaff(prev => prev.filter(s => s.id !== id));
+    supabase.from('staff').delete().eq('id', id).then();
   };
 
   // Inventory state
-  const [inventory, setInventory] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('products');
-      if (saved) return JSON.parse(saved);
-    }
-    return INITIAL_PRODUCTS;
-  });
+  const [inventory, setInventory] = useState<any[]>([]);
+  const [isInventoryLoading, setIsInventoryLoading] = useState(false);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -208,30 +233,26 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleSaveProduct = () => {
+  const handleSaveProduct = async () => {
     if (!prodName.trim() || !prodPrice.trim() || !prodStock.trim()) return;
     
+    const productData = {
+      name: prodName.trim(),
+      category: prodCategory,
+      price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
+      stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
+      code: prodCode.trim() || Math.floor(Math.random() * 1000000000).toString(),
+      image: prodImage || 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
+    };
+
     if (editingProdId) {
-      setInventory(prev => prev.map(p => p.id === editingProdId ? {
-        ...p,
-        name: prodName.trim(),
-        category: prodCategory,
-        price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
-        stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
-        code: prodCode.trim(),
-        image: prodImage || p.image
-      } : p));
+      setInventory(prev => prev.map(p => p.id === editingProdId ? { ...p, ...productData } : p));
+      await supabase.from('products').update(productData).eq('id', editingProdId);
     } else {
-      const newProd = {
-        id: Date.now().toString(),
-        name: prodName.trim(),
-        category: prodCategory,
-        price: parseInt(prodPrice.toString().replace(/\D/g, ''), 10) || 0,
-        stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
-        code: prodCode.trim() || Math.floor(Math.random() * 1000000000).toString(),
-        image: prodImage || 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
-      };
-      setInventory(prev => [newProd, ...prev]);
+      const { data, error } = await supabase.from('products').insert([productData]).select();
+      if (data && !error) {
+        setInventory(prev => [data[0], ...prev]);
+      }
     }
     resetProdForm();
   };
@@ -258,8 +279,9 @@ export default function AdminDashboard() {
     setShowAddProdModal(true);
   };
 
-  const handleDeleteProd = (id: string) => {
+  const handleDeleteProd = async (id: string) => {
     setInventory(prev => prev.filter(p => p.id !== id));
+    await supabase.from('products').delete().eq('id', id);
   };
 
   // Expenses state
@@ -269,27 +291,37 @@ export default function AdminDashboard() {
   const [expCategory, setExpCategory] = useState('Boshqa');
   const [editingExpId, setEditingExpId] = useState<number | null>(null);
 
-  const handleSaveExpense = () => {
+  const handleSaveExpense = async () => {
     if (!expTitle.trim() || !expAmount.trim()) return;
     
-    if (editingExpId) {
-      setExpenses(prev => prev.map(e => e.id === editingExpId ? {
-        ...e,
-        title: expTitle.trim(),
-        amount: parseInt(expAmount, 10),
-        category: expCategory
-      } : e));
-    } else {
-      const newExp = {
-        id: Date.now(),
-        title: expTitle.trim(),
-        amount: parseInt(expAmount, 10),
-        date: new Date().toLocaleDateString('uz-UZ').split('.').join('.'),
-        category: expCategory,
-      };
-      setExpenses(prev => [newExp, ...prev]);
+    const parsedAmount = parseInt(expAmount.toString().replace(/\D/g, ''), 10) || 0;
+    const expenseData = {
+      title: expTitle.trim(),
+      amount: parsedAmount,
+      category: expCategory,
+      date: new Date().toLocaleDateString('uz-UZ')
+    };
+
+    try {
+      if (editingExpId) {
+        setExpenses(prev => prev.map(e => e.id === editingExpId ? { ...e, ...expenseData } : e));
+        const { error } = await supabase.from('expenses').update(expenseData).eq('id', editingExpId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase.from('expenses').insert([expenseData]).select();
+        if (error) throw error;
+        if (data && data[0]) {
+          setExpenses(prev => [data[0], ...prev]);
+        } else {
+          setExpenses(prev => [{ id: Date.now(), ...expenseData }, ...prev]);
+        }
+      }
+      resetExpForm();
+    } catch (err: any) {
+      console.error('Error saving expense:', err);
+      const errorMsg = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      alert('Xarajatni saqlashda xatolik yuz berdi: ' + errorMsg);
     }
-    resetExpForm();
   };
 
   const resetExpForm = () => {
@@ -308,48 +340,24 @@ export default function AdminDashboard() {
     setShowAddExpModal(true);
   };
 
-  const handleDeleteExp = (id: number) => {
+  const handleDeleteExp = async (id: number) => {
     setExpenses(prev => prev.filter(e => e.id !== id));
+    await supabase.from('expenses').delete().eq('id', id);
   };
 
   // Expenses state
-  const [expenses, setExpenses] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('expenses');
-      if (saved) return JSON.parse(saved);
-    }
-    return [
-      { id: 1, title: 'Ijara haqi', amount: 2500000, date: '01.05.2026', category: 'Ijara' },
-      { id: 2, title: 'Elektr energiya', amount: 450000, date: '02.05.2026', category: 'Kommunal' },
-      { id: 3, title: 'Tushlik (Xodimlar)', amount: 120000, date: '04.05.2026', category: 'Oziq-ovqat' },
-    ];
-  });
+  const [expenses, setExpenses] = useState<any[]>([]);
 
-  const [debtors, setDebtors] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('debtors');
-      if (saved) return JSON.parse(saved);
-    }
-    return [
-      { id: 1, name: 'Aliyev Vali', phone: '+998 90 123 45 67', amount: 450000, date: '12.05.2026', over: false },
-      { id: 2, name: 'Rustamov Jasur', phone: '+998 93 987 65 43', amount: 1200000, date: '01.05.2026', over: true },
-      { id: 3, name: 'Karimova Malika', phone: '+998 97 111 22 33', amount: 800000, date: '20.05.2026', over: false },
-    ];
-  });
+  const [debtors, setDebtors] = useState<any[]>([]);
 
-  const [totalPaidAmount, setTotalPaidAmount] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('totalPaidAmount');
-      if (saved) return parseInt(saved, 10);
-    }
-    return 850000;
-  });
+  const [totalPaidAmount, setTotalPaidAmount] = useState(0);
 
 
-  const handlePayDebt = (id: number) => {
+  const handlePayDebt = async (id: number) => {
     const debtToPay = debtors.find(d => d.id === id);
     if (debtToPay) {
       setTotalPaidAmount(prev => prev + debtToPay.amount);
+      await supabase.from('debtors').delete().eq('id', id);
     }
     setDebtors(prev => prev.filter(d => d.id !== id));
   };
@@ -360,7 +368,7 @@ export default function AdminDashboard() {
   const [debtAmount, setDebtAmount] = useState('');
   const [debtDate, setDebtDate] = useState('');
 
-  const handleAddDebt = () => {
+  const handleAddDebt = async () => {
     if (!debtorName.trim() || !debtAmount.trim() || !debtDate.trim()) return;
     const [day, month, year] = debtDate.split('.').map(Number);
     const deadlineDate = new Date(year, month - 1, day);
@@ -369,7 +377,6 @@ export default function AdminDashboard() {
     const isOver = deadlineDate < today;
 
     const newDebt = {
-      id: Date.now(),
       name: debtorName.trim(),
       phone: debtorPhone.trim(),
       amount: parseInt(debtAmount.replace(/\D/g, ''), 10) || 0,
@@ -377,39 +384,20 @@ export default function AdminDashboard() {
       over: isOver,
     };
 
-    setDebtors(prev => [...prev, newDebt]);
-    setDebtorName('');
-    setDebtorPhone('');
-    setDebtAmount('');
-    setDebtDate('');
-    setShowAddDebtModal(false);
+    const { data, error } = await supabase.from('debtors').insert([newDebt]).select();
+    if (data && !error) {
+      setDebtors(prev => [...prev, data[0]]);
+      setDebtorName('');
+      setDebtorPhone('');
+      setDebtAmount('');
+      setDebtDate('');
+      setShowAddDebtModal(false);
+    }
   };
 
-  const [transactions, setTransactions] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('transactions');
-      if (saved) return JSON.parse(saved);
-    }
-    return [
-      { id: '1', customer: 'Aliyev Vali', amount: 120000, status: 'Muvaffaqiyatli', time: '10:45', method: 'Naqd' },
-      { id: '2', customer: 'Rustamov Jasur', amount: 45000, status: 'Kutilmoqda', time: '10:30', method: 'Karta' },
-      { id: '3', customer: 'Karimova Malika', amount: 210000, status: 'Muvaffaqiyatli', time: '10:15', method: 'Naqd' },
-      { id: '4', customer: 'Xolmatov Aziz', amount: 8000, status: 'Bekor qilingan', time: '09:50', method: 'Karta' },
-    ];
-  });
+  const [transactions, setTransactions] = useState<any[]>([]);
 
-  const [salesItems, setSalesItems] = useState(() => {
-    if (Platform.OS === 'web') {
-      const saved = localStorage.getItem('salesItems');
-      if (saved) return JSON.parse(saved);
-    }
-    return [
-      { id: 1, name: 'Coca Cola 1.5L', quantity: 24, total: 240000, category: 'Ichimliklar' },
-      { id: 2, name: 'Chortoq 0.5L', quantity: 15, total: 75000, category: 'Ichimliklar' },
-      { id: 3, name: 'Lays Chips 80g', quantity: 42, total: 420000, category: 'Snaklar' },
-      { id: 4, name: 'Orbit White', quantity: 30, total: 90000, category: 'Snaklar' },
-    ];
-  });
+  const [salesItems, setSalesItems] = useState<any[]>([]);
 
 
   useEffect(() => {
@@ -955,12 +943,12 @@ export default function AdminDashboard() {
         <Text style={[styles.th, { flex: 0.6, textAlign: 'right' }]}>Amallar</Text>
       </View>
       {expenses.map(exp => (
-        <View key={exp.id} style={styles.tr}>
-          <Text style={[styles.td, { flex: 2, fontWeight: '600' }]}>{exp.title}</Text>
-          <Text style={[styles.td, { flex: 1 }]}>{exp.category}</Text>
-          <Text style={[styles.td, { flex: 1, color: '#666' }]}>{exp.date}</Text>
+        <View key={exp.id || Math.random().toString()} style={styles.tr}>
+          <Text style={[styles.td, { flex: 2, fontWeight: '600' }]}>{exp.title || 'Izohsiz'}</Text>
+          <Text style={[styles.td, { flex: 1 }]}>{exp.category || 'Boshqa'}</Text>
+          <Text style={[styles.td, { flex: 1, color: '#666' }]}>{exp.date || '-'}</Text>
           <Text style={[styles.td, { flex: 1, textAlign: 'right', fontWeight: 'bold', color: '#E31E24' }]}>
-            {exp.amount.toLocaleString()} so'm
+            {(exp.amount || 0).toLocaleString()} so'm
           </Text>
           <View style={[styles.td, { flex: 0.6, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }]}>
             <TouchableOpacity onPress={() => handleEditExpClick(exp)}>
@@ -1465,7 +1453,10 @@ export default function AdminDashboard() {
         />
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => router.replace('/')}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={async () => {
+        await supabase.auth.signOut();
+        router.replace('/login');
+      }}>
         <Ionicons name="log-out-outline" size={24} color="#E31E24" />
         <Text style={styles.logoutText}>Chiqish</Text>
       </TouchableOpacity>

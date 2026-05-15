@@ -14,6 +14,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { supabase } from '@/lib/supabase';
 
 const { width } = Dimensions.get('window');
 const IS_DESKTOP = width > 1024;
@@ -27,10 +28,9 @@ export default function SalesPage() {
   const [adminAvatar, setAdminAvatar] = useState('https://ui-avatars.com/api/?name=Admin&background=E31E24&color=fff');
 
   useEffect(() => {
+    loadTransactions();
+    
     if (Platform.OS === 'web') {
-      const savedTransactions = localStorage.getItem('transactions');
-      if (savedTransactions) setTransactions(JSON.parse(savedTransactions));
-      
       const savedName = localStorage.getItem('adminName');
       if (savedName) setAdminName(savedName);
       
@@ -38,6 +38,25 @@ export default function SalesPage() {
       if (savedAvatar) setAdminAvatar(savedAvatar);
     }
   }, []);
+
+  const loadTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      if (data) setTransactions(data);
+    } catch (err) {
+      console.error('Error loading transactions:', err);
+      // Fallback to localStorage if Supabase fails
+      if (Platform.OS === 'web') {
+        const saved = localStorage.getItem('transactions');
+        if (saved) setTransactions(JSON.parse(saved));
+      }
+    }
+  };
 
   const renderSidebar = () => (
     <View style={styles.sidebar}>
@@ -88,7 +107,10 @@ export default function SalesPage() {
         />
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={() => router.replace('/')}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={async () => {
+        await supabase.auth.signOut();
+        router.replace('/login');
+      }}>
         <Ionicons name="log-out-outline" size={24} color="#E31E24" />
         <Text style={styles.logoutText}>Chiqish</Text>
       </TouchableOpacity>

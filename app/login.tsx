@@ -17,27 +17,17 @@ import { supabase } from '@/lib/supabase';
 const { width } = Dimensions.get('window');
 const IS_DESKTOP = width > 768;
 
-export default function RegisterScreen() {
+export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [email, setEmail] = useState('');
-  const [shopName, setShopName] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleRegister = async () => {
-    if (!email || !shopName || !adminPassword || !confirmPassword) {
-      setError('Iltimos, barcha maydonlarni to\'ldiring');
-      return;
-    }
-    if (adminPassword !== confirmPassword) {
-      setError('Parollar mos kelmadi');
-      return;
-    }
-    if (adminPassword.length < 6) {
-      setError('Parol kamida 6 ta belgidan iborat bo\'lishi kerak');
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setError('Iltimos, email va parolni kiriting');
       return;
     }
 
@@ -45,26 +35,21 @@ export default function RegisterScreen() {
     setError('');
 
     try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        password: adminPassword,
-        options: {
-          data: {
-            shop_name: shopName.trim(),
-          }
-        }
+        password: password,
       });
 
-      if (signUpError) {
-        setError(signUpError.message);
+      if (signInError) {
+        setError(signInError.message === 'Invalid login credentials' ? 'Email yoki parol noto\'g\'ri' : signInError.message);
         setLoading(false);
         return;
       }
 
-      // Save shop name to localStorage for quick access
+      // Save to localStorage for compatibility with existing logic
       if (Platform.OS === 'web') {
-        localStorage.setItem('shopName', shopName);
         localStorage.setItem('isRegistered', 'true');
+        // Fetch profile if needed, but for now we'll just go to tabs
       }
 
       router.replace('/(tabs)');
@@ -85,8 +70,8 @@ export default function RegisterScreen() {
           <Text style={styles.logoTitle}>Oson Kassa</Text>
         </View>
 
-        <Text style={styles.title}>Ro'yxatdan o'tish</Text>
-        <Text style={styles.subtitle}>Tizimdan foydalanish uchun do'koningizni sozlang</Text>
+        <Text style={styles.title}>Kirish</Text>
+        <Text style={styles.subtitle}>Tizimga kirish uchun ma'lumotlaringizni kiriting</Text>
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -106,41 +91,14 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Do'kon nomi</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="storefront-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Masalan: Mening Do'konim"
-              value={shopName}
-              onChangeText={setShopName}
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Admin paneli uchun parol</Text>
+          <Text style={styles.label}>Parol</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
             <TextInput
               style={styles.input}
-              placeholder="Parol yarating"
-              value={adminPassword}
-              onChangeText={setAdminPassword}
-              secureTextEntry
-            />
-          </View>
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Parolni tasdiqlang</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="lock-closed-outline" size={20} color="#666" style={styles.inputIcon} />
-            <TextInput
-              style={styles.input}
-              placeholder="Parolni qayta kiriting"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              placeholder="Parolingizni kiriting"
+              value={password}
+              onChangeText={setPassword}
               secureTextEntry
             />
           </View>
@@ -148,15 +106,15 @@ export default function RegisterScreen() {
 
         <TouchableOpacity 
           style={[styles.button, loading && { opacity: 0.7 }]} 
-          onPress={handleRegister}
+          onPress={handleLogin}
           disabled={loading}
         >
-          <Text style={styles.buttonText}>{loading ? 'Yuklanmoqda...' : "Ro'yxatdan o'tish"}</Text>
-          {!loading && <Ionicons name="arrow-forward" size={20} color="#fff" />}
+          <Text style={styles.buttonText}>{loading ? 'Yuklanmoqda...' : 'Kirish'}</Text>
+          {!loading && <Ionicons name="log-in-outline" size={20} color="#fff" />}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/login')}>
-          <Text style={styles.linkText}>Akkauntingiz bormi? Kirish</Text>
+        <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/register')}>
+          <Text style={styles.linkText}>{"Akkauntingiz yo'qmi? Ro'yxatdan o'tish"}</Text>
         </TouchableOpacity>
       </View>
     </View>
