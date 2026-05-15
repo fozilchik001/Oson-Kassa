@@ -52,7 +52,7 @@ export default function SalesPage() {
         <SidebarItem 
           icon="bar-chart-outline" 
           label="Hisobotlar" 
-          onPress={() => router.replace('/admin')} 
+          onPress={() => router.replace({ pathname: '/admin', params: { tab: 'Hisobotlar' } })} 
         />
         <SidebarItem 
           icon="cart-outline" 
@@ -62,29 +62,29 @@ export default function SalesPage() {
         <SidebarItem 
           icon="people-outline" 
           label="Xodimlar" 
-          onPress={() => router.replace('/admin')} 
+          onPress={() => router.replace({ pathname: '/admin', params: { tab: 'Staff' } })} 
         />
         <SidebarItem 
           icon="book-outline" 
           label="Qarzdorlar" 
-          onPress={() => router.replace('/admin')} 
+          onPress={() => router.replace({ pathname: '/admin', params: { tab: 'Qarzdorlar' } })} 
         />
         <SidebarItem 
           icon="cube-outline" 
           label="Ombor qoldig'i" 
-          onPress={() => router.replace('/admin')} 
+          onPress={() => router.replace({ pathname: '/admin', params: { tab: 'Inventory' } })} 
         />
         <View style={styles.navDivider} />
 
         <SidebarItem 
           icon="wallet-outline" 
           label="Xarajatlar" 
-          onPress={() => router.replace('/admin')} 
+          onPress={() => router.replace({ pathname: '/admin', params: { tab: 'Expenses' } })} 
         />
         <SidebarItem 
           icon="settings-outline" 
           label="Sozlamalar" 
-          onPress={() => router.replace('/admin')} 
+          onPress={() => router.replace({ pathname: '/admin', params: { tab: 'Settings' } })} 
         />
       </View>
 
@@ -121,10 +121,7 @@ export default function SalesPage() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Text style={styles.cardTitle}>Savdo tarixi</Text>
-              <View style={styles.datePicker}>
-                <Ionicons name="calendar-outline" size={18} color="#666" />
-                <Text style={styles.dateText}>04.05.2026 - 04.05.2026</Text>
-              </View>
+
             </View>
             <View style={styles.tableHeader}>
               <Text style={[styles.th, { flex: 1 }]}>ID</Text>

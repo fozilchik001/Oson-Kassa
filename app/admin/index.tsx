@@ -11,7 +11,7 @@ import {
   TextInput,
   Modal,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -23,7 +23,14 @@ const IS_DESKTOP = width > 1024;
 export default function AdminDashboard() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('Hisobotlar');
+  const params = useLocalSearchParams();
+  const [activeTab, setActiveTab] = useState((params.tab as string) || 'Hisobotlar');
+
+  useEffect(() => {
+    if (params.tab) {
+      setActiveTab(params.tab as string);
+    }
+  }, [params.tab]);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -1085,10 +1092,7 @@ export default function AdminDashboard() {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardTitle}>Savdo tarixi</Text>
-        <View style={styles.datePicker}>
-          <Ionicons name="calendar-outline" size={18} color="#666" />
-          <Text style={styles.dateText}>04.05.2026 - 04.05.2026</Text>
-        </View>
+
       </View>
       <View style={styles.tableHeader}>
         <Text style={[styles.th, { flex: 1 }]}>ID</Text>
