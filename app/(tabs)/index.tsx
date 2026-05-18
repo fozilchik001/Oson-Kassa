@@ -37,6 +37,8 @@ export default function PosScreen() {
   const [cart, setCart] = useState<any[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [splitCash, setSplitCash] = useState('');
   const [splitCard, setSplitCard] = useState('');
 
@@ -409,7 +411,8 @@ export default function PosScreen() {
       });
       setProducts(newProducts);
 
-      alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+      setSuccessMessage(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+      setShowSuccessModal(true);
       setCart([]);
       setShowPaymentModal(false);
       setShowSplitPaymentModal(false);
@@ -473,13 +476,7 @@ export default function PosScreen() {
                     value={searchQuery}
                     onChangeText={setSearchQuery}
                   />
-                  <TouchableOpacity onPress={() => alert('Skaner ochildi...')}>
-                    <Ionicons name="qr-code-outline" size={24} color="#E31E24" />
-                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.filterBtn}>
-                  <Ionicons name="options-outline" size={24} color="#E31E24" />
-                </TouchableOpacity>
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesRoot}>
@@ -1007,6 +1004,30 @@ export default function PosScreen() {
         </View>
       </Modal>
 
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { alignItems: 'center', paddingVertical: 40 }]}>
+            <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+              <Ionicons name="checkmark-circle" size={40} color="#28A745" />
+            </View>
+            <Text style={[styles.modalTitle, { textAlign: 'center', marginBottom: 8 }]}>Muvaffaqiyatli!</Text>
+            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 24 }}>{successMessage}</Text>
+            
+            <TouchableOpacity
+              style={[styles.saveBtn, { width: '100%', height: 60, borderRadius: 16, justifyContent: 'center', marginTop: 10 }]}
+              onPress={() => setShowSuccessModal(false)}
+            >
+              <Text style={[styles.saveBtnText, { fontSize: 18 }]}>Yopish</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
     </View>
 
