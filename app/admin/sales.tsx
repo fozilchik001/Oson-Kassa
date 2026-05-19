@@ -41,20 +41,30 @@ export default function SalesPage() {
 
   const loadTransactions = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const keySuffix = `_${user.id}`;
+      if (Platform.OS === 'web') {
+        const saved = localStorage.getItem(`transactions${keySuffix}`);
+        if (saved) setTransactions(JSON.parse(saved));
+      }
+
       const { data, error } = await supabase
         .from('transactions')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
         
       if (error) throw error;
-      if (data) setTransactions(data);
+      if (data) {
+        setTransactions(data);
+        if (Platform.OS === 'web') {
+          localStorage.setItem(`transactions${keySuffix}`, JSON.stringify(data));
+        }
+      }
     } catch (err) {
       console.error('Error loading transactions:', err);
-      // Fallback to localStorage if Supabase fails
-      if (Platform.OS === 'web') {
-        const saved = localStorage.getItem('transactions');
-        if (saved) setTransactions(JSON.parse(saved));
-      }
     }
   };
 

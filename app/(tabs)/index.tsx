@@ -45,11 +45,21 @@ export default function PosScreen() {
   // Products state
   const [products, setProducts] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserId(user.id);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
     const loadProducts = () => {
       if (Platform.OS === 'web') {
-        const saved = localStorage.getItem('products');
+        const saved = localStorage.getItem(`products_${userId}`);
         if (saved) {
           try {
             setProducts(JSON.parse(saved));
@@ -64,15 +74,7 @@ export default function PosScreen() {
       window.addEventListener('focus', loadProducts);
       return () => window.removeEventListener('focus', loadProducts);
     }
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      localStorage.setItem('products', JSON.stringify(products));
-    }
-  }, [products]);
-
-
+  }, [userId]);
 
   // Add Product Modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -85,52 +87,95 @@ export default function PosScreen() {
 
   // Debtors state
   const [debtors, setDebtors] = useState<any[]>([]);
+  const [debtFilter, setDebtFilter] = useState<'all' | 'overdue' | 'approaching' | 'future'>('all');
+  const [showFilterOptions, setShowFilterOptions] = useState(false);
+
+  const getDebtorDaysLeft = (debtDate: string) => {
+    try {
+      if (!debtDate) return 999;
+      const parts = debtDate.split('.');
+      if (parts.length !== 3) return 999;
+      const [day, month, year] = parts.map(Number);
+      const deadlineDate = new Date(year, month - 1, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffTime = deadlineDate.getTime() - today.getTime();
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    } catch (e) {
+      return 999;
+    }
+  };
+
+  const filteredDebtors = useMemo(() => {
+    return debtors.filter(d => {
+      if (debtFilter === 'all') return true;
+      const days = getDebtorDaysLeft(d.date);
+      if (debtFilter === 'overdue') return days < 0;
+      if (debtFilter === 'approaching') return days >= 0 && days <= 7;
+      if (debtFilter === 'future') return days > 7;
+      return true;
+    });
+  }, [debtors, debtFilter]);
 
   const [totalPaidAmount, setTotalPaidAmount] = useState(0);
 
   useEffect(() => {
-    loadInitialData();
-  }, []);
+    if (userId) {
+      loadInitialData();
+    }
+  }, [userId]);
 
   const loadInitialData = async () => {
     setIsLoading(true);
     try {
-      // Fetch Products
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not logged in');
+
+      const keySuffix = `_${user.id}`;
+      // Load from local storage scoped to user for instant UI rendering
+      if (Platform.OS === 'web') {
+        const savedProds = localStorage.getItem(`products${keySuffix}`);
+        const savedDebtors = localStorage.getItem(`debtors${keySuffix}`);
+        const savedPaid = localStorage.getItem(`totalPaidAmount${keySuffix}`);
+        if (savedProds) setProducts(JSON.parse(savedProds));
+        if (savedDebtors) setDebtors(JSON.parse(savedDebtors));
+        if (savedPaid) setTotalPaidAmount(parseInt(savedPaid, 10) || 0);
+      }
+
+      // Fetch Products filtered by user_id
       const { data: prods, error: prodErr } = await supabase
         .from('products')
         .select('*')
+        .eq('user_id', user.id)
         .order('name', { ascending: true });
       
       if (prodErr) throw prodErr;
       if (prods) setProducts(prods);
 
-      // Fetch Debtors
+      // Fetch Debtors filtered by user_id
       const { data: dbt, error: dbtErr } = await supabase
         .from('debtors')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
         
       if (dbtErr) throw dbtErr;
       if (dbt) setDebtors(dbt);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error('Supabase load error:', err);
-      // Fallback to initial products only if everything fails and we have no products
-      if (products.length === 0) {
-        setProducts(INITIAL_PRODUCTS);
-      }
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      localStorage.setItem('products', JSON.stringify(products));
-      localStorage.setItem('debtors', JSON.stringify(debtors));
-      localStorage.setItem('totalPaidAmount', totalPaidAmount.toString());
+    if (Platform.OS === 'web' && userId) {
+      localStorage.setItem(`products_${userId}`, JSON.stringify(products));
+      localStorage.setItem(`debtors_${userId}`, JSON.stringify(debtors));
+      localStorage.setItem(`totalPaidAmount_${userId}`, totalPaidAmount.toString());
     }
-  }, [products, debtors, totalPaidAmount]);
+  }, [products, debtors, totalPaidAmount, userId]);
 
 
 
@@ -164,29 +209,36 @@ export default function PosScreen() {
     today.setHours(0, 0, 0, 0);
     const isOver = deadlineDate < today;
 
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const newDebt = {
       name: debtorName.trim(),
       phone: debtorPhone.trim(),
       amount: parseInt(debtAmount.replace(/\D/g, ''), 10) || 0,
       date: debtDate.trim(),
       over: isOver,
+      user_id: currentUserId,
     };
 
-    const { data, error } = await supabase.from('debtors').insert([newDebt]).select();
-    
-    if (error) {
-      console.error('Error adding debt:', error);
-      alert('Qarzni saqlashda xatolik yuz berdi');
-      return;
-    }
+    const tempId = 'temp-' + Date.now();
+    const localDebt = { id: tempId, ...newDebt, created_at: new Date().toISOString() };
 
-    if (data) {
-      setDebtors(prev => [data[0], ...prev]);
-      setDebtorName('');
-      setDebtorPhone('');
-      setDebtAmount('');
-      setDebtDate('');
-      setShowAddDebtModal(false);
+    setDebtors(prev => [localDebt, ...prev]);
+    setDebtorName('');
+    setDebtorPhone('');
+    setDebtAmount('');
+    setDebtDate('');
+    setShowAddDebtModal(false);
+
+    try {
+      const { data, error } = await supabase.from('debtors').insert([newDebt]).select();
+      if (error) throw error;
+      if (data && data[0]) {
+        setDebtors(prev => prev.map(d => d.id === tempId ? data[0] : d));
+      }
+    } catch (err) {
+      console.error('Error adding debt to Supabase, saved locally:', err);
     }
   };
 
@@ -212,6 +264,10 @@ export default function PosScreen() {
 
   const handleAddProduct = async () => {
     if (!newName.trim() || !newPrice.trim() || !newStock.trim()) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const productData = {
       name: newName.trim(),
       category: newCategory,
@@ -219,25 +275,29 @@ export default function PosScreen() {
       stock: parseInt(newStock.toString().replace(/\D/g, ''), 10) || 0,
       code: newBarcode.trim() || String(Math.floor(Math.random() * 900000000 + 100000000)),
       image: newImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(newName)}&background=E31E24&color=fff&size=200`,
+      user_id: currentUserId,
     };
 
-    const { data, error } = await supabase.from('products').insert([productData]).select();
+    const tempId = 'temp-' + Date.now();
+    const localProduct = { id: tempId, ...productData, created_at: new Date().toISOString() };
 
-    if (error) {
-      console.error('Error adding product:', error);
-      alert('Mahsulotni saqlashda xatolik yuz berdi');
-      return;
-    }
+    setProducts(prev => [...prev, localProduct]);
+    setNewName('');
+    setNewCategory('Ichimliklar');
+    setNewPrice('');
+    setNewStock('');
+    setNewBarcode('');
+    setNewImage(null);
+    setShowAddModal(false);
 
-    if (data) {
-      setProducts(prev => [...prev, data[0]]);
-      setNewName('');
-      setNewCategory('Ichimliklar');
-      setNewPrice('');
-      setNewStock('');
-      setNewBarcode('');
-      setNewImage(null);
-      setShowAddModal(false);
+    try {
+      const { data, error } = await supabase.from('products').insert([productData]).select();
+      if (error) throw error;
+      if (data && data[0]) {
+        setProducts(prev => prev.map(p => p.id === tempId ? data[0] : p));
+      }
+    } catch (err) {
+      console.error('Error adding product to Supabase, saved locally:', err);
     }
   };
 
@@ -280,6 +340,9 @@ export default function PosScreen() {
   const handleEditProduct = async () => {
     if (!editName.trim() || !editPrice.trim() || !editStock.trim() || !editId) return;
     
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const updatedData = {
       name: editName.trim(),
       category: editCategory,
@@ -287,27 +350,35 @@ export default function PosScreen() {
       stock: parseInt(editStock, 10) || 0,
       code: editBarcode.trim(),
       image: editImage,
+      user_id: currentUserId,
     };
-
-    const { error } = await supabase.from('products').update(updatedData).eq('id', editId);
-
-    if (error) {
-      console.error('Error updating product:', error);
-      alert('Mahsulotni tahrirlashda xatolik yuz berdi');
-      return;
-    }
 
     setProducts(prev => prev.map(p =>
       p.id === editId ? { ...p, ...updatedData } : p
     ));
     setShowEditModal(false);
+
+    try {
+      if (typeof editId === 'number' || !editId.toString().startsWith('temp-')) {
+        const { error } = await supabase.from('products').update(updatedData).eq('id', editId);
+        if (error) throw error;
+      }
+    } catch (err) {
+      console.error('Error updating product on Supabase, updated locally:', err);
+    }
   };
 
   const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
     return products.filter((p) => {
       const catMatch = selectedCategory === 'all' || p.category.toLowerCase() === selectedCategory.toLowerCase();
-      const searchMatch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      return catMatch && searchMatch;
+      if (!query) return catMatch;
+      
+      const nameMatch = p.name.toLowerCase().includes(query);
+      const codeMatch = p.code ? p.code.toLowerCase().includes(query) : false;
+      const categoryMatch = p.category ? p.category.toLowerCase().includes(query) : false;
+      
+      return catMatch && (nameMatch || codeMatch || categoryMatch);
     });
   }, [products, selectedCategory, searchQuery]);
 
@@ -329,6 +400,20 @@ export default function PosScreen() {
       }
       return [...prev, { ...product, quantity: 1 }];
     });
+  };
+
+  const handleSearchTextChange = (text: string) => {
+    setSearchQuery(text);
+    
+    // Check if the input is an exact match for a barcode of one of our products
+    const cleanText = text.trim();
+    if (cleanText.length >= 3) {
+      const foundProduct = products.find(p => p.code && p.code.trim() === cleanText);
+      if (foundProduct) {
+        addToCart(foundProduct);
+        setSearchQuery('');
+      }
+    }
   };
 
   const updateQuantity = (id: string, delta: number) => {
@@ -371,52 +456,53 @@ export default function PosScreen() {
       return;
     }
 
-    // Update Stock in Supabase and Local
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
+    const methodLabel = method === 'Aralash' && splitData 
+      ? `Aralash (N:${splitData.cash.toLocaleString()} + K:${splitData.card.toLocaleString()})`
+      : method;
+
+    const transactionData = {
+      customer: 'Mijoz',
+      amount: total,
+      status: 'Muvaffaqiyatli',
+      time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
+      method: methodLabel,
+      user_id: currentUserId,
+    };
+
+    // Update local products stock immediately to ensure instant response and local persistence
+    const newProducts = products.map(p => {
+      const cartItem = cart.find(item => item.id === p.id);
+      if (cartItem) {
+        return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
+      }
+      return p;
+    });
+    setProducts(newProducts);
+
+    alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+    setCart([]);
+    setShowPaymentModal(false);
+    setShowSplitPaymentModal(false);
+
     try {
       const updatePromises = cart.map(item => {
-        const product = products.find(p => p.id === item.id);
-        if (product) {
-          const newStock = Math.max(0, product.stock - item.quantity);
-          return supabase.from('products').update({ stock: newStock }).eq('id', item.id);
+        if (typeof item.id === 'number' || !item.id.toString().startsWith('temp-')) {
+          const product = products.find(p => p.id === item.id);
+          if (product) {
+            const newStock = Math.max(0, product.stock - item.quantity);
+            return supabase.from('products').update({ stock: newStock }).eq('id', item.id);
+          }
         }
         return Promise.resolve({ error: null });
       });
 
       await Promise.all(updatePromises);
-
-      // Record Transaction for Admin
-      const methodLabel = method === 'Aralash' && splitData 
-        ? `Aralash (N:${splitData.cash.toLocaleString()} + K:${splitData.card.toLocaleString()})`
-        : method;
-
-      const transactionData = {
-        customer: 'Mijoz',
-        amount: total,
-        status: 'Muvaffaqiyatli',
-        time: new Date().toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }),
-        method: methodLabel
-      };
-
       await supabase.from('transactions').insert([transactionData]);
-
-      // Update local products stock
-      const newProducts = products.map(p => {
-        const cartItem = cart.find(item => item.id === p.id);
-        if (cartItem) {
-          return { ...p, stock: Math.max(0, p.stock - cartItem.quantity) };
-        }
-        return p;
-      });
-      setProducts(newProducts);
-
-      alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
-      setCart([]);
-      setShowPaymentModal(false);
-      setShowSplitPaymentModal(false);
-      
     } catch (err) {
-      console.error('Error completing sale:', err);
-      alert('Sotuvni amalga oshirishda xatolik yuz berdi');
+      console.error('Error completing sale on Supabase, saved locally:', err);
     }
   };
 
@@ -469,17 +555,22 @@ export default function PosScreen() {
                   <Ionicons name="search-outline" size={20} color="#999" />
                   <TextInput
                     style={styles.searchInput}
-                    placeholder="Mahsulot qidirish yoki shtrih kod..."
+                    placeholder="Mahsulot qidirish..."
                     value={searchQuery}
-                    onChangeText={setSearchQuery}
+                    onChangeText={handleSearchTextChange}
+                    onSubmitEditing={() => {
+                      const cleanText = searchQuery.trim();
+                      const foundProduct = products.find(p => 
+                        (p.code && p.code.trim() === cleanText) ||
+                        p.name.toLowerCase() === cleanText.toLowerCase()
+                      );
+                      if (foundProduct) {
+                        addToCart(foundProduct);
+                        setSearchQuery('');
+                      }
+                    }}
                   />
-                  <TouchableOpacity onPress={() => alert('Skaner ochildi...')}>
-                    <Ionicons name="qr-code-outline" size={24} color="#E31E24" />
-                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={styles.filterBtn}>
-                  <Ionicons name="options-outline" size={24} color="#E31E24" />
-                </TouchableOpacity>
               </View>
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesRoot}>
@@ -609,15 +700,31 @@ export default function PosScreen() {
         );
 
 
-      case 'Qarzdorlar':
+      case 'Qarzdorlar': {
+        const overdueCount = debtors.filter(d => getDebtorDaysLeft(d.date) < 0).length;
+        const approachingCount = debtors.filter(d => {
+          const days = getDebtorDaysLeft(d.date);
+          return days >= 0 && days <= 7;
+        }).length;
+        const farCount = debtors.filter(d => getDebtorDaysLeft(d.date) > 7).length;
+
         return (
           <View style={styles.pageContent}>
             <View style={styles.pageHeaderRow}>
               <Text style={styles.pageTitle}>Qarzdorlar</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddDebtModal(true)}>
-                <Ionicons name="add" size={20} color="#fff" />
-                <Text style={styles.primaryBtnText}>Qarz qo'shish</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <TouchableOpacity 
+                  style={[styles.filterToggleBtn, showFilterOptions && styles.filterToggleBtnActive]} 
+                  onPress={() => setShowFilterOptions(!showFilterOptions)}
+                >
+                  <Ionicons name="filter" size={20} color={showFilterOptions ? "#fff" : "#E31E24"} />
+                  <Text style={[styles.filterToggleText, showFilterOptions && { color: '#fff' }]}>Filtrlash</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddDebtModal(true)}>
+                  <Ionicons name="add" size={20} color="#fff" />
+                  <Text style={styles.primaryBtnText}>Qarz qo'shish</Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* Modals moved to root */}
@@ -658,16 +765,82 @@ export default function PosScreen() {
               </View>
             </View>
 
+            {showFilterOptions && (
+              <View style={styles.filterContainer}>
+                <TouchableOpacity
+                  style={[styles.filterBtn, debtFilter === 'all' && styles.filterBtnActive]}
+                  onPress={() => setDebtFilter('all')}
+                >
+                  <Text style={[styles.filterBtnText, debtFilter === 'all' && styles.filterBtnTextActive]}>
+                    Barchasi ({debtors.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterBtn,
+                    styles.filterBtnRed,
+                    debtFilter === 'overdue' && styles.filterBtnRedActive
+                  ]}
+                  onPress={() => setDebtFilter('overdue')}
+                >
+                  <View style={[styles.dotIndicator, { backgroundColor: '#E31E24' }]} />
+                  <Text style={[
+                    styles.filterBtnText,
+                    styles.filterBtnRedText,
+                    debtFilter === 'overdue' && styles.filterBtnRedTextActive
+                  ]}>
+                    Muddati o'tganlar ({overdueCount})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterBtn,
+                    styles.filterBtnOrange,
+                    debtFilter === 'approaching' && styles.filterBtnOrangeActive
+                  ]}
+                  onPress={() => setDebtFilter('approaching')}
+                >
+                  <View style={[styles.dotIndicator, { backgroundColor: '#FB8C00' }]} />
+                  <Text style={[
+                    styles.filterBtnText,
+                    styles.filterBtnOrangeText,
+                    debtFilter === 'approaching' && styles.filterBtnOrangeTextActive
+                  ]}>
+                    Muddati yaqinlashayotganlar ({approachingCount})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.filterBtn,
+                    styles.filterBtnGreen,
+                    debtFilter === 'future' && styles.filterBtnGreenActive
+                  ]}
+                  onPress={() => setDebtFilter('future')}
+                >
+                  <View style={[styles.dotIndicator, { backgroundColor: '#28A745' }]} />
+                  <Text style={[
+                    styles.filterBtnText,
+                    styles.filterBtnGreenText,
+                    debtFilter === 'future' && styles.filterBtnGreenTextActive
+                  ]}>
+                    To'lashga ancha borlar ({farCount})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.card}>
                <View style={styles.tableHeader}>
-                <Text style={[styles.th, { flex: 2 }]}>FIO</Text>
+                <Text style={[styles.th, { flex: 2.5 }]}>FIO</Text>
                 <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
-                <Text style={[styles.th, { flex: 1.5 }]}>Qarz Summasi</Text>
-                <Text style={[styles.th, { flex: 1 }]}>Muddati</Text>
-                <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Harakatlar</Text>
+                <Text style={[styles.th, { flex: 2 }]}>Qarz Summasi</Text>
+                <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Muddati</Text>
               </View>
               <ScrollView>
-                {debtors.map(debtor => {
+                {filteredDebtors.map(debtor => {
                   // Re-calculate over status dynamically
                   let isOver = debtor.over;
                   try {
@@ -680,30 +853,22 @@ export default function PosScreen() {
 
                   return (
                     <View key={debtor.id} style={styles.tr}>
-                      <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                      <View style={[styles.td, { flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
                         <View style={styles.userAvatar}>
                           <Text style={styles.userAvatarText}>{debtor.name.charAt(0)}</Text>
                         </View>
                         <Text style={{ fontWeight: '600', color: '#333' }}>{debtor.name}</Text>
                       </View>
                       <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>{debtor.phone}</Text>
-                      <Text style={[styles.td, { flex: 1.5, fontWeight: 'bold', color: '#E31E24' }]}>
+                      <Text style={[styles.td, { flex: 2, fontWeight: 'bold', color: '#E31E24' }]}>
                         {debtor.amount.toLocaleString()} so'm
                       </Text>
-                      <View style={[styles.td, { flex: 1 }]}>
+                      <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
                          <View style={[styles.badge, isOver ? styles.badgeDanger : styles.badgeWarning]}>
                             <Text style={[styles.badgeText, isOver ? styles.badgeDangerText : styles.badgeWarningText]}>
                               {debtor.date}
                             </Text>
                          </View>
-                      </View>
-                      <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
-                        <TouchableOpacity 
-                          style={styles.actionBtn} 
-                          onPress={() => handlePayDebt(debtor.id)}
-                        >
-                          <Text style={styles.actionBtnText}>To'lash</Text>
-                        </TouchableOpacity>
                       </View>
                     </View>
                   );
@@ -712,6 +877,7 @@ export default function PosScreen() {
             </View>
           </View>
         );
+      }
 
 
       default:
@@ -1834,5 +2000,102 @@ const styles = StyleSheet.create({
     right: 8,
     backgroundColor: '#fff',
     borderRadius: 12,
+  },
+  filterToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#E31E24',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  filterToggleBtnActive: {
+    backgroundColor: '#E31E24',
+  },
+  filterToggleText: {
+    color: '#E31E24',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    gap: 6,
+  },
+  filterBtnActive: {
+    backgroundColor: '#333',
+    borderColor: '#333',
+  },
+  filterBtnText: {
+    fontSize: 13,
+    color: '#555',
+    fontWeight: '600',
+  },
+  filterBtnTextActive: {
+    color: '#fff',
+  },
+  dotIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  filterBtnRed: {
+    borderColor: '#FFCDD2',
+  },
+  filterBtnRedActive: {
+    backgroundColor: '#E31E24',
+    borderColor: '#E31E24',
+  },
+  filterBtnRedText: {
+    color: '#C62828',
+  },
+  filterBtnRedTextActive: {
+    color: '#fff',
+  },
+  filterBtnOrange: {
+    borderColor: '#FFE0B2',
+  },
+  filterBtnOrangeActive: {
+    backgroundColor: '#FB8C00',
+    borderColor: '#FB8C00',
+  },
+  filterBtnOrangeText: {
+    color: '#EF6C00',
+  },
+  filterBtnOrangeTextActive: {
+    color: '#fff',
+  },
+  filterBtnGreen: {
+    borderColor: '#C8E6C9',
+  },
+  filterBtnGreenActive: {
+    backgroundColor: '#28A745',
+    borderColor: '#28A745',
+  },
+  filterBtnGreenText: {
+    color: '#2E7D32',
+  },
+  filterBtnGreenTextActive: {
+    color: '#fff',
   },
 });

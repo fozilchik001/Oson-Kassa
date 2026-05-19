@@ -40,9 +40,21 @@ export default function AdminDashboard() {
   const [adminAvatar, setAdminAvatar] = useState('https://ui-avatars.com/api/?name=Admin&background=E31E24&color=fff');
   const avatarInputRef = useRef<any>(null);
 
+  const [userId, setUserId] = useState<string | null>(null);
+
   useEffect(() => {
-    loadInitialData();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserId(user.id);
+      }
+    });
   }, []);
+
+  useEffect(() => {
+    if (userId) {
+      loadInitialData();
+    }
+  }, [userId]);
 
   const loadInitialData = async () => {
     if (Platform.OS === 'web') {
@@ -53,36 +65,46 @@ export default function AdminDashboard() {
     }
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (user?.user_metadata?.shop_name) {
+    if (!user) return;
+
+    if (user.user_metadata?.shop_name) {
       setAdminName(user.user_metadata.shop_name);
+    }
+
+    const keySuffix = `_${user.id}`;
+    // Load from local storage scoped to user for instant UI rendering
+    if (Platform.OS === 'web') {
+      const savedInventory = localStorage.getItem(`products${keySuffix}`);
+      const savedStaff = localStorage.getItem(`staff${keySuffix}`);
+      const savedExpenses = localStorage.getItem(`expenses${keySuffix}`);
+      const savedDebtors = localStorage.getItem(`debtors${keySuffix}`);
+      const savedTrx = localStorage.getItem(`transactions${keySuffix}`);
+      if (savedInventory) setInventory(JSON.parse(savedInventory));
+      if (savedStaff) setStaff(JSON.parse(savedStaff));
+      if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
+      if (savedDebtors) setDebtors(JSON.parse(savedDebtors));
+      if (savedTrx) setTransactions(JSON.parse(savedTrx));
     }
 
     try {
       // Fetch Products
-      const { data: prods, error: prodErr } = await supabase.from('products').select('*');
+      const { data: prods, error: prodErr } = await supabase.from('products').select('*').eq('user_id', user.id);
       if (prods && !prodErr) setInventory(prods);
 
       // Fetch Staff
-      const { data: stf, error: stfErr } = await supabase.from('staff').select('*');
+      const { data: stf, error: stfErr } = await supabase.from('staff').select('*').eq('user_id', user.id);
       if (stf && !stfErr) setStaff(stf);
 
       // Fetch Expenses
-      const { data: exp, error: expErr } = await supabase.from('expenses').select('*').order('created_at', { ascending: false });
-      if (expErr) console.error('Expenses load error:', expErr);
-      if (exp && exp.length > 0) {
-        setExpenses(exp);
-        // Temporary debug alert to see column names
-        // console.log('Expense columns:', Object.keys(exp[0]));
-      } else if (exp) {
-        setExpenses(exp);
-      }
+      const { data: exp, error: expErr } = await supabase.from('expenses').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+      if (exp && !expErr) setExpenses(exp);
 
       // Fetch Debtors
-      const { data: dbt, error: dbtErr } = await supabase.from('debtors').select('*');
+      const { data: dbt, error: dbtErr } = await supabase.from('debtors').select('*').eq('user_id', user.id);
       if (dbt && !dbtErr) setDebtors(dbt);
 
       // Fetch Transactions
-      const { data: trx, error: trxErr } = await supabase.from('transactions').select('*').order('created_at', { ascending: false });
+      const { data: trx, error: trxErr } = await supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
       if (trx && !trxErr) setTransactions(trx);
     } catch (err) {
       console.log('Supabase load error:', err);
@@ -144,25 +166,44 @@ export default function AdminDashboard() {
   const handleSaveStaff = async () => {
     if (!staffName.trim() || !staffPhone.trim()) return;
     
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const staffData = {
       name: staffName.trim(),
       role: staffRole,
       phone: staffPhone.trim(),
       image: staffImage,
-      status: 'Faol'
+      status: 'Faol',
+      user_id: currentUserId
     };
+
+    const tempId = editingStaffId || 'temp-' + Date.now();
 
     if (editingStaffId) {
       setStaff(prev => prev.map(s => s.id === editingStaffId ? { ...s, ...staffData } : s));
-      await supabase.from('staff').update(staffData).eq('id', editingStaffId);
+      resetStaffForm();
+      try {
+        if (typeof editingStaffId === 'number' || !editingStaffId.toString().startsWith('temp-')) {
+          await supabase.from('staff').update(staffData).eq('id', editingStaffId);
+        }
+      } catch (err) {
+        console.error('Error updating staff on Supabase:', err);
+      }
     } else {
-      const { data, error } = await supabase.from('staff').insert([staffData]).select();
-      if (data && !error) {
-        setStaff(prev => [...prev, data[0]]);
+      const localStaff = { id: tempId, ...staffData, created_at: new Date().toISOString() };
+      setStaff(prev => [...prev, localStaff]);
+      resetStaffForm();
+      try {
+        const { data, error } = await supabase.from('staff').insert([staffData]).select();
+        if (error) throw error;
+        if (data && data[0]) {
+          setStaff(prev => prev.map(s => s.id === tempId ? data[0] : s));
+        }
+      } catch (err) {
+        console.error('Error inserting staff to Supabase, saved locally:', err);
       }
     }
-
-    resetStaffForm();
   };
 
   const resetStaffForm = () => {
@@ -236,6 +277,9 @@ export default function AdminDashboard() {
   const handleSaveProduct = async () => {
     if (!prodName.trim() || !prodPrice.trim() || !prodStock.trim()) return;
     
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const productData = {
       name: prodName.trim(),
       category: prodCategory,
@@ -243,18 +287,35 @@ export default function AdminDashboard() {
       stock: parseInt(prodStock.toString().replace(/\D/g, ''), 10) || 0,
       code: prodCode.trim() || Math.floor(Math.random() * 1000000000).toString(),
       image: prodImage || 'https://images.unsplash.com/photo-1583258292688-d0213dc5a3a8?w=200&h=200&fit=crop',
+      user_id: currentUserId
     };
+
+    const tempId = editingProdId || 'temp-' + Date.now();
 
     if (editingProdId) {
       setInventory(prev => prev.map(p => p.id === editingProdId ? { ...p, ...productData } : p));
-      await supabase.from('products').update(productData).eq('id', editingProdId);
+      resetProdForm();
+      try {
+        if (typeof editingProdId === 'number' || !editingProdId.toString().startsWith('temp-')) {
+          await supabase.from('products').update(productData).eq('id', editingProdId);
+        }
+      } catch (err) {
+        console.error('Error updating product on Supabase:', err);
+      }
     } else {
-      const { data, error } = await supabase.from('products').insert([productData]).select();
-      if (data && !error) {
-        setInventory(prev => [data[0], ...prev]);
+      const localProduct = { id: tempId, ...productData, created_at: new Date().toISOString() };
+      setInventory(prev => [localProduct, ...prev]);
+      resetProdForm();
+      try {
+        const { data, error } = await supabase.from('products').insert([productData]).select();
+        if (error) throw error;
+        if (data && data[0]) {
+          setInventory(prev => prev.map(p => p.id === tempId ? data[0] : p));
+        }
+      } catch (err) {
+        console.error('Error inserting product to Supabase, saved locally:', err);
       }
     }
-    resetProdForm();
   };
 
   const resetProdForm = () => {
@@ -294,33 +355,43 @@ export default function AdminDashboard() {
   const handleSaveExpense = async () => {
     if (!expTitle.trim() || !expAmount.trim()) return;
     
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const parsedAmount = parseInt(expAmount.toString().replace(/\D/g, ''), 10) || 0;
     const expenseData = {
       title: expTitle.trim(),
       amount: parsedAmount,
       category: expCategory,
-      date: new Date().toLocaleDateString('uz-UZ')
+      date: new Date().toLocaleDateString('uz-UZ'),
+      user_id: currentUserId
     };
 
-    try {
-      if (editingExpId) {
-        setExpenses(prev => prev.map(e => e.id === editingExpId ? { ...e, ...expenseData } : e));
-        const { error } = await supabase.from('expenses').update(expenseData).eq('id', editingExpId);
-        if (error) throw error;
-      } else {
+    const tempId = editingExpId || 'temp-' + Date.now();
+
+    if (editingExpId) {
+      setExpenses(prev => prev.map(e => e.id === editingExpId ? { ...e, ...expenseData } : e));
+      resetExpForm();
+      try {
+        if (typeof editingExpId === 'number' || !editingExpId.toString().startsWith('temp-')) {
+          await supabase.from('expenses').update(expenseData).eq('id', editingExpId);
+        }
+      } catch (err) {
+        console.error('Error updating expense on Supabase:', err);
+      }
+    } else {
+      const localExpense = { id: tempId, ...expenseData, created_at: new Date().toISOString() };
+      setExpenses(prev => [localExpense, ...prev]);
+      resetExpForm();
+      try {
         const { data, error } = await supabase.from('expenses').insert([expenseData]).select();
         if (error) throw error;
         if (data && data[0]) {
-          setExpenses(prev => [data[0], ...prev]);
-        } else {
-          setExpenses(prev => [{ id: Date.now(), ...expenseData }, ...prev]);
+          setExpenses(prev => prev.map(e => e.id === tempId ? data[0] : e));
         }
+      } catch (err) {
+        console.error('Error inserting expense to Supabase, saved locally:', err);
       }
-      resetExpForm();
-    } catch (err: any) {
-      console.error('Error saving expense:', err);
-      const errorMsg = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-      alert('Xarajatni saqlashda xatolik yuz berdi: ' + errorMsg);
     }
   };
 
@@ -349,6 +420,35 @@ export default function AdminDashboard() {
   const [expenses, setExpenses] = useState<any[]>([]);
 
   const [debtors, setDebtors] = useState<any[]>([]);
+  const [debtFilter, setDebtFilter] = useState<'all' | 'overdue' | 'approaching' | 'future'>('all');
+  const [showFilterOptions, setShowFilterOptions] = useState(false);
+
+  const getDebtorDaysLeft = (debtDate: string) => {
+    try {
+      if (!debtDate) return 999;
+      const parts = debtDate.split('.');
+      if (parts.length !== 3) return 999;
+      const [day, month, year] = parts.map(Number);
+      const deadlineDate = new Date(year, month - 1, day);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const diffTime = deadlineDate.getTime() - today.getTime();
+      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    } catch (e) {
+      return 999;
+    }
+  };
+
+  const filteredDebtors = useMemo(() => {
+    return debtors.filter(d => {
+      if (debtFilter === 'all') return true;
+      const days = getDebtorDaysLeft(d.date);
+      if (debtFilter === 'overdue') return days < 0;
+      if (debtFilter === 'approaching') return days >= 0 && days <= 7;
+      if (debtFilter === 'future') return days > 7;
+      return true;
+    });
+  }, [debtors, debtFilter]);
 
   const [totalPaidAmount, setTotalPaidAmount] = useState(0);
 
@@ -376,22 +476,36 @@ export default function AdminDashboard() {
     today.setHours(0, 0, 0, 0);
     const isOver = deadlineDate < today;
 
+    const { data: { user } } = await supabase.auth.getUser();
+    const currentUserId = user?.id || 'local-user';
+
     const newDebt = {
       name: debtorName.trim(),
       phone: debtorPhone.trim(),
       amount: parseInt(debtAmount.replace(/\D/g, ''), 10) || 0,
       date: debtDate.trim(),
       over: isOver,
+      user_id: currentUserId
     };
 
-    const { data, error } = await supabase.from('debtors').insert([newDebt]).select();
-    if (data && !error) {
-      setDebtors(prev => [...prev, data[0]]);
-      setDebtorName('');
-      setDebtorPhone('');
-      setDebtAmount('');
-      setDebtDate('');
-      setShowAddDebtModal(false);
+    const tempId = 'temp-' + Date.now();
+    const localDebt = { id: tempId, ...newDebt, created_at: new Date().toISOString() };
+
+    setDebtors(prev => [...prev, localDebt]);
+    setDebtorName('');
+    setDebtorPhone('');
+    setDebtAmount('');
+    setDebtDate('');
+    setShowAddDebtModal(false);
+
+    try {
+      const { data, error } = await supabase.from('debtors').insert([newDebt]).select();
+      if (error) throw error;
+      if (data && data[0]) {
+        setDebtors(prev => prev.map(d => d.id === tempId ? data[0] : d));
+      }
+    } catch (err) {
+      console.error('Error inserting debt to Supabase, saved locally:', err);
     }
   };
 
@@ -401,15 +515,15 @@ export default function AdminDashboard() {
 
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      localStorage.setItem('staff', JSON.stringify(staff));
-      localStorage.setItem('expenses', JSON.stringify(expenses));
-      localStorage.setItem('transactions', JSON.stringify(transactions));
-      localStorage.setItem('salesItems', JSON.stringify(salesItems));
-      localStorage.setItem('debtors', JSON.stringify(debtors));
-      localStorage.setItem('totalPaidAmount', totalPaidAmount.toString());
+    if (Platform.OS === 'web' && userId) {
+      localStorage.setItem(`staff_${userId}`, JSON.stringify(staff));
+      localStorage.setItem(`expenses_${userId}`, JSON.stringify(expenses));
+      localStorage.setItem(`transactions_${userId}`, JSON.stringify(transactions));
+      localStorage.setItem(`salesItems_${userId}`, JSON.stringify(salesItems));
+      localStorage.setItem(`debtors_${userId}`, JSON.stringify(debtors));
+      localStorage.setItem(`totalPaidAmount_${userId}`, totalPaidAmount.toString());
     }
-  }, [staff, expenses, transactions, salesItems, debtors, totalPaidAmount]);
+  }, [staff, expenses, transactions, salesItems, debtors, totalPaidAmount, userId]);
 
 
 
@@ -1107,162 +1221,238 @@ export default function AdminDashboard() {
     </View>
   );
 
-  const renderDebtors = () => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle}>Qarzdorlar</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddDebtModal(true)}>
-          <Ionicons name="add" size={20} color="#fff" />
-          <Text style={styles.primaryBtnText}>Qarz qo'shish</Text>
-        </TouchableOpacity>
-      </View>
+  const renderDebtors = () => {
+    const overdueCount = debtors.filter(d => getDebtorDaysLeft(d.date) < 0).length;
+    const approachingCount = debtors.filter(d => {
+      const days = getDebtorDaysLeft(d.date);
+      return days >= 0 && days <= 7;
+    }).length;
+    const farCount = debtors.filter(d => getDebtorDaysLeft(d.date) > 7).length;
 
-      <Modal
-        visible={showAddDebtModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowAddDebtModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Yangi Qarz Qo'shish</Text>
-              <TouchableOpacity onPress={() => setShowAddDebtModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.fieldLabel}>Mijoz F.I.O *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="Masalan: Aliyev Vali"
-              value={debtorName}
-              onChangeText={setDebtorName}
-            />
-
-            <Text style={styles.fieldLabel}>Telefon raqami</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="+998 90 123 45 67"
-              value={debtorPhone}
-              onChangeText={setDebtorPhone}
-              keyboardType="phone-pad"
-            />
-
-            <Text style={styles.fieldLabel}>Qarz summasi *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="500000"
-              value={debtAmount}
-              onChangeText={setDebtAmount}
-              keyboardType="numeric"
-            />
-
-            <Text style={styles.fieldLabel}>To'lash muddati (KK.OO.YYYY) *</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="12.05.2026"
-              value={debtDate}
-              onChangeText={setDebtDate}
-            />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddDebtModal(false)}>
-                <Text style={styles.cancelBtnText}>Bekor qilish</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveBtn, (!debtorName || !debtAmount || !debtDate) && styles.saveBtnDisabled]}
-                onPress={handleAddDebt}
-              >
-                <Ionicons name="checkmark" size={20} color="#fff" />
-                <Text style={styles.saveBtnText}>Saqlash</Text>
-              </TouchableOpacity>
-            </View>
+    return (
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={styles.cardTitle}>Qarzdorlar</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity 
+              style={[styles.filterToggleBtn, showFilterOptions && styles.filterToggleBtnActive]} 
+              onPress={() => setShowFilterOptions(!showFilterOptions)}
+            >
+              <Ionicons name="filter" size={20} color={showFilterOptions ? "#fff" : "#E31E24"} />
+              <Text style={[styles.filterToggleText, showFilterOptions && { color: '#fff' }]}>Filtrlash</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowAddDebtModal(true)}>
+              <Ionicons name="add" size={20} color="#fff" />
+              <Text style={styles.primaryBtnText}>Qarz qo'shish</Text>
+            </TouchableOpacity>
           </View>
         </View>
-      </Modal>
 
-      <View style={[styles.statsGrid, { marginBottom: 20 }]}>
-        <View style={[styles.statCard, { flex: 1, backgroundColor: '#FFF5F5', borderColor: '#FFEBEB', borderWidth: 1 }]}>
-          <View style={styles.statIconWrapperRed}>
-            <Ionicons name="wallet-outline" size={24} color="#E31E24" />
-          </View>
-          <View>
-            <Text style={styles.statLabel}>Umumiy Qarz Miqdori</Text>
-            <Text style={[styles.statValue, { color: '#E31E24' }]}>
-              {debtors.reduce((sum, d) => sum + d.amount, 0).toLocaleString()} so'm
-            </Text>
-          </View>
-        </View>
-        <View style={[styles.statCard, { flex: 1 }]}>
-           <View style={styles.statIconWrapperGray}>
-            <Ionicons name="people-outline" size={24} color="#333" />
-          </View>
-          <View>
-            <Text style={styles.statLabel}>Qarzdorlar Soni</Text>
-            <Text style={styles.statValue}>{debtors.length} ta</Text>
-          </View>
-        </View>
-        <View style={[styles.statCard, { flex: 1 }]}>
-           <View style={styles.statIconWrapperGreen}>
-            <Ionicons name="checkmark-circle-outline" size={24} color="#28A745" />
-          </View>
-          <View>
-            <Text style={styles.statLabel}>To'langan QarZlar (Oy)</Text>
-            <Text style={styles.statValue}>{totalPaidAmount.toLocaleString()} so'm</Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.tableHeader}>
-        <Text style={[styles.th, { flex: 2 }]}>FIO</Text>
-        <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
-        <Text style={[styles.th, { flex: 1.5 }]}>Qarz Summasi</Text>
-        <Text style={[styles.th, { flex: 1 }]}>Muddati</Text>
-        <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Harakatlar</Text>
-      </View>
-      {debtors.map(debtor => {
-        let isOver = debtor.over;
-        try {
-          const [day, month, year] = debtor.date.split('.').map(Number);
-          const deadlineDate = new Date(year, month - 1, day);
-          const today = new Date();
-          today.setHours(0, 0, 0, 0);
-          isOver = deadlineDate < today;
-        } catch (e) {}
-
-        return (
-          <View key={debtor.id} style={styles.tr}>
-            <View style={[styles.td, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
-              <View style={styles.miniAvatar}>
-                <Text style={styles.miniAvatarText}>{debtor.name.charAt(0)}</Text>
+        <Modal
+          visible={showAddDebtModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowAddDebtModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Yangi Qarz Qo'shish</Text>
+                <TouchableOpacity onPress={() => setShowAddDebtModal(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
               </View>
-              <Text style={{ fontWeight: '600', color: '#333' }}>{debtor.name}</Text>
-            </View>
-            <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>{debtor.phone}</Text>
-            <Text style={[styles.td, { flex: 1.5, fontWeight: 'bold', color: '#E31E24' }]}>
-              {debtor.amount.toLocaleString()} so'm
-            </Text>
-            <View style={[styles.td, { flex: 1 }]}>
-               <View style={[styles.badge, isOver ? {backgroundColor: '#FFEBEE'} : styles.badgeWarning]}>
-                  <Text style={[styles.badgeText, isOver ? {color: '#C62828'} : styles.badgeWarningText]}>
-                    {debtor.date}
-                  </Text>
-               </View>
-            </View>
-            <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
-              <TouchableOpacity 
-                style={styles.actionBtn} 
-                onPress={() => handlePayDebt(debtor.id)}
-              >
-                <Text style={{color: '#E31E24', fontWeight: 'bold'}}>To'lash</Text>
-              </TouchableOpacity>
+
+              <Text style={styles.fieldLabel}>Mijoz F.I.O *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Masalan: Aliyev Vali"
+                value={debtorName}
+                onChangeText={setDebtorName}
+              />
+
+              <Text style={styles.fieldLabel}>Telefon raqami</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="+998 90 123 45 67"
+                value={debtorPhone}
+                onChangeText={setDebtorPhone}
+                keyboardType="phone-pad"
+              />
+
+              <Text style={styles.fieldLabel}>Qarz summasi *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="500000"
+                value={debtAmount}
+                onChangeText={setDebtAmount}
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.fieldLabel}>To'lash muddati (KK.OO.YYYY) *</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="12.05.2026"
+                value={debtDate}
+                onChangeText={setDebtDate}
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddDebtModal(false)}>
+                  <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveBtn, (!debtorName || !debtAmount || !debtDate) && styles.saveBtnDisabled]}
+                  onPress={handleAddDebt}
+                >
+                  <Ionicons name="checkmark" size={20} color="#fff" />
+                  <Text style={styles.saveBtnText}>Saqlash</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        );
-      })}
-    </View>
-  );
+        </Modal>
+
+        <View style={[styles.statsGrid, { marginBottom: 20 }]}>
+          <View style={[styles.statCard, { flex: 1, backgroundColor: '#FFF5F5', borderColor: '#FFEBEB', borderWidth: 1 }]}>
+            <View style={styles.statIconWrapperRed}>
+              <Ionicons name="wallet-outline" size={24} color="#E31E24" />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Umumiy Qarz Miqdori</Text>
+              <Text style={[styles.statValue, { color: '#E31E24' }]}>
+                {debtors.reduce((sum, d) => sum + d.amount, 0).toLocaleString()} so'm
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.statCard, { flex: 1 }]}>
+             <View style={styles.statIconWrapperGray}>
+              <Ionicons name="people-outline" size={24} color="#333" />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>Qarzdorlar Soni</Text>
+              <Text style={styles.statValue}>{debtors.length} ta</Text>
+            </View>
+          </View>
+          <View style={[styles.statCard, { flex: 1 }]}>
+             <View style={styles.statIconWrapperGreen}>
+              <Ionicons name="checkmark-circle-outline" size={24} color="#28A745" />
+            </View>
+            <View>
+              <Text style={styles.statLabel}>To'langan QarZlar (Oy)</Text>
+              <Text style={styles.statValue}>{totalPaidAmount.toLocaleString()} so'm</Text>
+            </View>
+          </View>
+        </View>
+
+        {showFilterOptions && (
+          <View style={styles.filterContainer}>
+            <TouchableOpacity
+              style={[styles.filterBtn, debtFilter === 'all' && styles.filterBtnActive]}
+              onPress={() => setDebtFilter('all')}
+            >
+              <Text style={[styles.filterBtnText, debtFilter === 'all' && styles.filterBtnTextActive]}>
+                Barchasi ({debtors.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterBtn,
+                styles.filterBtnRed,
+                debtFilter === 'overdue' && styles.filterBtnRedActive
+              ]}
+              onPress={() => setDebtFilter('overdue')}
+            >
+              <View style={[styles.dotIndicator, { backgroundColor: '#E31E24' }]} />
+              <Text style={[
+                styles.filterBtnText,
+                styles.filterBtnRedText,
+                debtFilter === 'overdue' && styles.filterBtnRedTextActive
+              ]}>
+                Muddati o'tganlar ({overdueCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterBtn,
+                styles.filterBtnOrange,
+                debtFilter === 'approaching' && styles.filterBtnOrangeActive
+              ]}
+              onPress={() => setDebtFilter('approaching')}
+            >
+              <View style={[styles.dotIndicator, { backgroundColor: '#FB8C00' }]} />
+              <Text style={[
+                styles.filterBtnText,
+                styles.filterBtnOrangeText,
+                debtFilter === 'approaching' && styles.filterBtnOrangeTextActive
+              ]}>
+                Muddati yaqinlashayotganlar ({approachingCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.filterBtn,
+                styles.filterBtnGreen,
+                debtFilter === 'future' && styles.filterBtnGreenActive
+              ]}
+              onPress={() => setDebtFilter('future')}
+            >
+              <View style={[styles.dotIndicator, { backgroundColor: '#28A745' }]} />
+              <Text style={[
+                styles.filterBtnText,
+                styles.filterBtnGreenText,
+                debtFilter === 'future' && styles.filterBtnGreenTextActive
+              ]}>
+                To'lashga ancha borlar ({farCount})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <View style={styles.tableHeader}>
+          <Text style={[styles.th, { flex: 2.5 }]}>FIO</Text>
+          <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
+          <Text style={[styles.th, { flex: 2 }]}>Qarz Summasi</Text>
+          <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Muddati</Text>
+        </View>
+        {filteredDebtors.map(debtor => {
+          let isOver = debtor.over;
+          try {
+            const [day, month, year] = debtor.date.split('.').map(Number);
+            const deadlineDate = new Date(year, month - 1, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            isOver = deadlineDate < today;
+          } catch (e) {}
+
+          return (
+            <View key={debtor.id} style={styles.tr}>
+              <View style={[styles.td, { flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                <View style={styles.miniAvatar}>
+                  <Text style={styles.miniAvatarText}>{debtor.name.charAt(0)}</Text>
+                </View>
+                <Text style={{ fontWeight: '600', color: '#333' }}>{debtor.name}</Text>
+              </View>
+              <Text style={[styles.td, { flex: 1.5, color: '#666' }]}>{debtor.phone}</Text>
+              <Text style={[styles.td, { flex: 2, fontWeight: 'bold', color: '#E31E24' }]}>
+                {debtor.amount.toLocaleString()} so'm
+              </Text>
+              <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                 <View style={[styles.badge, isOver ? {backgroundColor: '#FFEBEE'} : styles.badgeWarning]}>
+                    <Text style={[styles.badgeText, isOver ? {color: '#C62828'} : styles.badgeWarningText]}>
+                      {debtor.date}
+                    </Text>
+                 </View>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -2388,5 +2578,102 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 13,
+  },
+  filterToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#E31E24',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 8,
+  },
+  filterToggleBtnActive: {
+    backgroundColor: '#E31E24',
+  },
+  filterToggleText: {
+    color: '#E31E24',
+    fontWeight: 'bold',
+    fontSize: 15,
+  },
+  filterContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  filterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    gap: 6,
+  },
+  filterBtnActive: {
+    backgroundColor: '#333',
+    borderColor: '#333',
+  },
+  filterBtnText: {
+    fontSize: 13,
+    color: '#555',
+    fontWeight: '600',
+  },
+  filterBtnTextActive: {
+    color: '#fff',
+  },
+  dotIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  filterBtnRed: {
+    borderColor: '#FFCDD2',
+  },
+  filterBtnRedActive: {
+    backgroundColor: '#E31E24',
+    borderColor: '#E31E24',
+  },
+  filterBtnRedText: {
+    color: '#C62828',
+  },
+  filterBtnRedTextActive: {
+    color: '#fff',
+  },
+  filterBtnOrange: {
+    borderColor: '#FFE0B2',
+  },
+  filterBtnOrangeActive: {
+    backgroundColor: '#FB8C00',
+    borderColor: '#FB8C00',
+  },
+  filterBtnOrangeText: {
+    color: '#EF6C00',
+  },
+  filterBtnOrangeTextActive: {
+    color: '#fff',
+  },
+  filterBtnGreen: {
+    borderColor: '#C8E6C9',
+  },
+  filterBtnGreenActive: {
+    backgroundColor: '#28A745',
+    borderColor: '#28A745',
+  },
+  filterBtnGreenText: {
+    color: '#2E7D32',
+  },
+  filterBtnGreenTextActive: {
+    color: '#fff',
   },
 });
