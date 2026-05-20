@@ -35,13 +35,39 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password,
-      });
-
-      if (signInError) {
-        setError(signInError.message === 'Invalid login credentials' ? 'Email yoki parol noto\'g\'ri' : signInError.message);
+      try {
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password: password,
+        });
+        console.log('Supabase signIn response:', { data, signInError });
+        if (signInError) {
+          // Show a user‑friendly message while keeping the original error for debugging
+          const friendly = signInError.message === 'Invalid login credentials'
+            ? "Email yoki parol noto'g'ri"
+            : signInError.message;
+          console.error('Login error:', signInError);
+          setError(friendly);
+          setLoading(false);
+          return;
+        }
+        // Ensure a session exists
+        if (!data.session) {
+          console.warn('No session returned after sign‑in');
+          setError('Kirish muvaffaqiyatsiz, sessiya topilmadi');
+          setLoading(false);
+          return;
+        }
+        // Persist for web if needed
+        if (Platform.OS === 'web') {
+          localStorage.setItem('isRegistered', 'true');
+        }
+        // Navigate to the main tabs screen
+        router.replace('/(tabs)');
+        return;
+      } catch (err) {
+        console.error('Unexpected login exception:', err);
+        setError('Kutilmagan xatolik yuz berdi');
         setLoading(false);
         return;
       }

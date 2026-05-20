@@ -1,22 +1,21 @@
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Dimensions,
-  Platform,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import { PRODUCTS as INITIAL_PRODUCTS } from '@/constants/PosData';
 import { supabase } from '@/lib/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+    Dimensions,
+    Modal,
+    Platform,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 const IS_DESKTOP = width > 1024;
@@ -1643,13 +1642,19 @@ export default function AdminDashboard() {
         />
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={async () => {
-        await supabase.auth.signOut();
-        router.replace('/login');
-      }}>
-        <Ionicons name="log-out-outline" size={24} color="#E31E24" />
-        <Text style={styles.logoutText}>Chiqish</Text>
-      </TouchableOpacity>
+      <View style={styles.sidebarFooter}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => router.replace('/(tabs)')}>
+          <Ionicons name="arrow-back-outline" size={24} color="#333" />
+          <Text style={styles.backText}>Qaytish</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.logoutBtn} onPress={async () => {
+          await supabase.auth.signOut();
+          router.replace('/login');
+        }}>
+          <Ionicons name="log-out-outline" size={24} color="#E31E24" />
+          <Text style={styles.logoutText}>Chiqish</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -1791,10 +1796,25 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     marginHorizontal: 10,
   },
+  sidebarFooter: {
+    marginTop: 'auto',
+    gap: 16,
+    paddingBottom: 20,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+    gap: 12,
+  },
+  backText: {
+    color: '#333',
+    fontWeight: '600',
+    fontSize: 15,
+  },
   logoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 'auto',
     paddingHorizontal: 28,
     gap: 12,
   },
