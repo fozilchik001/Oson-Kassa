@@ -201,6 +201,49 @@ export default function PosScreen() {
   const [debtAmount, setDebtAmount] = useState('');
   const [debtDate, setDebtDate] = useState('');
 
+  // Pay Debt Modal state
+  const [showPayDebtModal, setShowPayDebtModal] = useState(false);
+  const [selectedDebtorForPay, setSelectedDebtorForPay] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState('');
+
+  const openPayDebtModal = (debtor: any) => {
+    setSelectedDebtorForPay(debtor);
+    setPayAmount(debtor.amount.toString());
+    setShowPayDebtModal(true);
+  };
+
+  const handlePartialPayDebt = async () => {
+    if (!selectedDebtorForPay) return;
+    const paid = parseInt(payAmount.replace(/\D/g, ''), 10) || 0;
+    if (paid <= 0) return;
+
+    if (paid >= selectedDebtorForPay.amount) {
+      // To'liq to'lash
+      await handlePayDebt(selectedDebtorForPay.id);
+    } else {
+      // Qisman to'lash
+      const remaining = selectedDebtorForPay.amount - paid;
+      setTotalPaidAmount(prev => prev + paid);
+      const { error } = await supabase
+        .from('debtors')
+        .update({ amount: remaining })
+        .eq('id', selectedDebtorForPay.id);
+      if (!error) {
+        setDebtors(prev => prev.map(d =>
+          d.id === selectedDebtorForPay.id ? { ...d, amount: remaining } : d
+        ));
+      } else {
+        console.error('Error updating debt:', error);
+        setDebtors(prev => prev.map(d =>
+          d.id === selectedDebtorForPay.id ? { ...d, amount: remaining } : d
+        ));
+      }
+    }
+    setShowPayDebtModal(false);
+    setSelectedDebtorForPay(null);
+    setPayAmount('');
+  };
+
   const handleAddDebt = async () => {
     if (!debtorName.trim() || !debtAmount.trim() || !debtDate.trim()) return;
     
@@ -840,7 +883,8 @@ export default function PosScreen() {
                 <Text style={[styles.th, { flex: 2.5 }]}>FIO</Text>
                 <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
                 <Text style={[styles.th, { flex: 2 }]}>Qarz Summasi</Text>
-                <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Muddati</Text>
+                <Text style={[styles.th, { flex: 1.5, textAlign: 'center' }]}>Muddati</Text>
+                <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Amal</Text>
               </View>
               <ScrollView>
                 {filteredDebtors.map(debtor => {
@@ -866,12 +910,21 @@ export default function PosScreen() {
                       <Text style={[styles.td, { flex: 2, fontWeight: 'bold', color: '#E31E24' }]}>
                         {debtor.amount.toLocaleString()} so'm
                       </Text>
-                      <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                      <View style={[styles.td, { flex: 1.5, flexDirection: 'row', justifyContent: 'center' }]}>
                          <View style={[styles.badge, isOver ? styles.badgeDanger : styles.badgeWarning]}>
                             <Text style={[styles.badgeText, isOver ? styles.badgeDangerText : styles.badgeWarningText]}>
                               {debtor.date}
                             </Text>
                          </View>
+                      </View>
+                      <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                        <TouchableOpacity
+                          style={styles.payDebtBtn}
+                          onPress={() => openPayDebtModal(debtor)}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                          <Text style={styles.payDebtBtnText}>To'lash</Text>
+                        </TouchableOpacity>
                       </View>
                     </View>
                   );
@@ -1202,11 +1255,121 @@ export default function PosScreen() {
         </View>
       </Modal>
 
+      {/* Pay Debt Modal */}
+      <Modal
+        visible={showPayDebtModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowPayDebtModal(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', maxWidth: 440, backgroundColor: '#ffffff', borderRadius: 24, padding: 28, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.15, shadowRadius: 30, elevation: 15 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="wallet" size={24} color="#28A745" />
+                </View>
+                <Text style={{ fontSize: 24, fontWeight: '700', color: '#1A1A1A', letterSpacing: -0.5 }}>Qarzni to'lash</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowPayDebtModal(false)} style={{ padding: 6, backgroundColor: '#F8F9FA', borderRadius: 20 }}>
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedDebtorForPay && (
+              <>
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 16, padding: 20, marginBottom: 24, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <View style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
+                      <Text style={{ fontSize: 22, fontWeight: '700', color: '#0284C7' }}>
+                        {selectedDebtorForPay.name.charAt(0).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '500', marginBottom: 4 }}>Mijoz (Qarzdor)</Text>
+                      <Text style={{ fontSize: 18, color: '#0F172A', fontWeight: '700' }}>{selectedDebtorForPay.name}</Text>
+                    </View>
+                  </View>
+                  
+                  <View style={{ height: 1, backgroundColor: '#E2E8F0', marginBottom: 16 }} />
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 15, color: '#64748B', fontWeight: '500' }}>Jami qarz miqdori:</Text>
+                    <Text style={{ fontSize: 20, color: '#E31E24', fontWeight: '800' }}>
+                      {selectedDebtorForPay.amount.toLocaleString()} so'm
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={{ fontSize: 15, color: '#334155', fontWeight: '600', marginBottom: 10, marginLeft: 4 }}>To'lanadigan summa <Text style={{ color: '#E31E24' }}>*</Text></Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderRadius: 16, borderWidth: 2, borderColor: payAmount ? '#28A745' : '#E2E8F0', paddingHorizontal: 16, height: 64 }}>
+                  <Ionicons name="cash-outline" size={26} color={payAmount ? "#28A745" : "#94A3B8"} style={{ marginRight: 12 }} />
+                  <TextInput
+                    style={{ flex: 1, height: '100%', fontSize: 24, color: '#0F172A', fontWeight: '700', ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) }}
+                    placeholder="0"
+                    placeholderTextColor="#CBD5E1"
+                    value={payAmount}
+                    onChangeText={setPayAmount}
+                    keyboardType="numeric"
+                    autoFocus
+                  />
+                  <Text style={{ color: '#64748B', fontSize: 18, fontWeight: '600' }}>so'm</Text>
+                </View>
+
+                {(() => {
+                  const paid = parseInt(payAmount.replace(/\D/g, ''), 10) || 0;
+                  const remaining = selectedDebtorForPay.amount - paid;
+                  if (paid > 0 && paid < selectedDebtorForPay.amount) {
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF7ED', borderRadius: 12, padding: 14, marginTop: 16, borderWidth: 1, borderColor: '#FFEDD5' }}>
+                        <Ionicons name="information-circle" size={22} color="#F97316" style={{ marginRight: 10 }} />
+                        <Text style={{ fontSize: 15, color: '#C2410C', fontWeight: '600', flex: 1 }}>
+                          Qolgan qarz: {remaining.toLocaleString()} so'm
+                        </Text>
+                      </View>
+                    );
+                  }
+                  if (paid >= selectedDebtorForPay.amount && paid > 0) {
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 12, padding: 14, marginTop: 16, borderWidth: 1, borderColor: '#DCFCE7' }}>
+                        <Ionicons name="checkmark-circle" size={22} color="#22C55E" style={{ marginRight: 10 }} />
+                        <Text style={{ fontSize: 15, color: '#15803D', fontWeight: '600', flex: 1 }}>
+                          Ajoyib! Qarz to'liq uziladi.
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
+
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 32 }}>
+                  <TouchableOpacity 
+                    style={{ flex: 1, height: 56, backgroundColor: '#F1F5F9', borderRadius: 16, justifyContent: 'center', alignItems: 'center' }} 
+                    onPress={() => setShowPayDebtModal(false)}
+                  >
+                    <Text style={{ color: '#475569', fontSize: 16, fontWeight: '700' }}>Bekor qilish</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ flex: 1.5, height: 56, backgroundColor: (!payAmount || parseInt(payAmount.replace(/\D/g, ''), 10) <= 0) ? '#CBD5E1' : '#28A745', borderRadius: 16, justifyContent: 'center', alignItems: 'center', flexDirection: 'row', gap: 8 }}
+                    onPress={handlePartialPayDebt}
+                    disabled={!payAmount || parseInt(payAmount.replace(/\D/g, ''), 10) <= 0}
+                  >
+                    <Ionicons name="checkmark-done-circle" size={22} color="#fff" />
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: '700' }}>Tasdiqlash</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
 
     </View>
 
   );
 }
+
 
 function NavItem({ icon, label, active = false, onPress }: any) {
   return (
@@ -2126,5 +2289,60 @@ const styles = StyleSheet.create({
   },
   filterBtnGreenTextActive: {
     color: '#fff',
+  },
+  payDebtBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28A745',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+  },
+  payDebtBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  payDebtInfoBox: {
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#eee',
+  },
+  payDebtInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  payDebtInfoLabel: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
+  payDebtInfoValue: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '600',
+    flex: 1,
+  },
+  payDebtRemaining: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1,
+    borderColor: '#FFE082',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 10,
+  },
+  payDebtRemainingText: {
+    fontSize: 13,
+    color: '#F57F17',
+    fontWeight: '600',
   },
 });
