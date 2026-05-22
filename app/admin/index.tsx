@@ -467,6 +467,41 @@ export default function AdminDashboard() {
   const [debtAmount, setDebtAmount] = useState('');
   const [debtDate, setDebtDate] = useState('');
 
+  // Pay Debt Modal state
+  const [showPayDebtModal, setShowPayDebtModal] = useState(false);
+  const [selectedDebtorForPay, setSelectedDebtorForPay] = useState<any>(null);
+  const [payAmount, setPayAmount] = useState('');
+
+  const openPayDebtModal = (debtor: any) => {
+    setSelectedDebtorForPay(debtor);
+    setPayAmount(debtor.amount.toString());
+    setShowPayDebtModal(true);
+  };
+
+  const handlePartialPayDebt = async () => {
+    if (!selectedDebtorForPay) return;
+    const paid = parseInt(payAmount.replace(/\D/g, ''), 10) || 0;
+    if (paid <= 0) return;
+
+    if (paid >= selectedDebtorForPay.amount) {
+      await handlePayDebt(selectedDebtorForPay.id);
+    } else {
+      const remaining = selectedDebtorForPay.amount - paid;
+      setTotalPaidAmount(prev => prev + paid);
+      const { error } = await supabase
+        .from('debtors')
+        .update({ amount: remaining })
+        .eq('id', selectedDebtorForPay.id);
+      setDebtors(prev => prev.map(d =>
+        d.id === selectedDebtorForPay.id ? { ...d, amount: remaining } : d
+      ));
+      if (error) console.error('Error updating debt:', error);
+    }
+    setShowPayDebtModal(false);
+    setSelectedDebtorForPay(null);
+    setPayAmount('');
+  };
+
   const handleAddDebt = async () => {
     if (!debtorName.trim() || !debtAmount.trim() || !debtDate.trim()) return;
     const [day, month, year] = debtDate.split('.').map(Number);
@@ -1312,6 +1347,97 @@ export default function AdminDashboard() {
           </View>
         </Modal>
 
+        {/* Pay Debt Modal */}
+        <Modal
+          visible={showPayDebtModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowPayDebtModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Qarzni To'lash</Text>
+                <TouchableOpacity onPress={() => setShowPayDebtModal(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+
+              {selectedDebtorForPay && (
+                <>
+                  <View style={styles.payDebtInfoBox}>
+                    <View style={styles.payDebtInfoRow}>
+                      <Ionicons name="person-outline" size={18} color="#666" />
+                      <Text style={styles.payDebtInfoLabel}>Qarzdor:</Text>
+                      <Text style={styles.payDebtInfoValue}>{selectedDebtorForPay.name}</Text>
+                    </View>
+                    <View style={styles.payDebtInfoRow}>
+                      <Ionicons name="wallet-outline" size={18} color="#E31E24" />
+                      <Text style={styles.payDebtInfoLabel}>Umumiy qarz:</Text>
+                      <Text style={[styles.payDebtInfoValue, { color: '#E31E24', fontWeight: 'bold' }]}>
+                        {selectedDebtorForPay.amount.toLocaleString()} so'm
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.fieldLabel}>To'lanadigan summa *</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="cash-outline" size={20} color="#28A745" style={{ marginRight: 10 }} />
+                    <TextInput
+                      style={styles.modalInputNoMargin}
+                      placeholder="0"
+                      value={payAmount}
+                      onChangeText={setPayAmount}
+                      keyboardType="numeric"
+                      autoFocus
+                    />
+                    <Text style={{ color: '#999', fontSize: 14 }}>so'm</Text>
+                  </View>
+
+                  {(() => {
+                    const paid = parseInt(payAmount.replace(/\D/g, ''), 10) || 0;
+                    const remaining = selectedDebtorForPay.amount - paid;
+                    if (paid > 0 && paid < selectedDebtorForPay.amount) {
+                      return (
+                        <View style={styles.payDebtRemaining}>
+                          <Ionicons name="information-circle-outline" size={16} color="#FB8C00" />
+                          <Text style={styles.payDebtRemainingText}>
+                            Qolgan qarz: {remaining.toLocaleString()} so'm
+                          </Text>
+                        </View>
+                      );
+                    }
+                    if (paid >= selectedDebtorForPay.amount && paid > 0) {
+                      return (
+                        <View style={[styles.payDebtRemaining, { backgroundColor: '#F1F8E9', borderColor: '#C8E6C9' }]}>
+                          <Ionicons name="checkmark-circle-outline" size={16} color="#28A745" />
+                          <Text style={[styles.payDebtRemainingText, { color: '#28A745' }]}>
+                            Qarz to'liq to'lanadi!
+                          </Text>
+                        </View>
+                      );
+                    }
+                    return null;
+                  })()}
+
+                  <View style={[styles.modalActions, { marginTop: 24 }]}>
+                    <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowPayDebtModal(false)}>
+                      <Text style={styles.cancelBtnText}>Bekor qilish</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.saveBtn, { backgroundColor: '#28A745' }, (!payAmount || parseInt(payAmount.replace(/\D/g, ''), 10) <= 0) && styles.saveBtnDisabled]}
+                      onPress={handlePartialPayDebt}
+                    >
+                      <Ionicons name="checkmark-circle" size={20} color="#fff" />
+                      <Text style={styles.saveBtnText}>Tasdiqlash</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </View>
+        </Modal>
+
         <View style={[styles.statsGrid, { marginBottom: 20 }]}>
           <View style={[styles.statCard, { flex: 1, backgroundColor: '#FFF5F5', borderColor: '#FFEBEB', borderWidth: 1 }]}>
             <View style={styles.statIconWrapperRed}>
@@ -1415,7 +1541,8 @@ export default function AdminDashboard() {
           <Text style={[styles.th, { flex: 2.5 }]}>FIO</Text>
           <Text style={[styles.th, { flex: 1.5 }]}>Telefon</Text>
           <Text style={[styles.th, { flex: 2 }]}>Qarz Summasi</Text>
-          <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Muddati</Text>
+          <Text style={[styles.th, { flex: 1.5, textAlign: 'center' }]}>Muddati</Text>
+          <Text style={[styles.th, { flex: 1, textAlign: 'right' }]}>Amal</Text>
         </View>
         {filteredDebtors.map(debtor => {
           let isOver = debtor.over;
@@ -1439,12 +1566,21 @@ export default function AdminDashboard() {
               <Text style={[styles.td, { flex: 2, fontWeight: 'bold', color: '#E31E24' }]}>
                 {debtor.amount.toLocaleString()} so'm
               </Text>
-              <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+              <View style={[styles.td, { flex: 1.5, flexDirection: 'row', justifyContent: 'center' }]}>
                  <View style={[styles.badge, isOver ? {backgroundColor: '#FFEBEE'} : styles.badgeWarning]}>
                     <Text style={[styles.badgeText, isOver ? {color: '#C62828'} : styles.badgeWarningText]}>
                       {debtor.date}
                     </Text>
                  </View>
+              </View>
+              <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                <TouchableOpacity
+                  style={styles.payDebtBtn}
+                  onPress={() => openPayDebtModal(debtor)}
+                >
+                  <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                  <Text style={styles.payDebtBtnText}>To'lash</Text>
+                </TouchableOpacity>
               </View>
             </View>
           );
