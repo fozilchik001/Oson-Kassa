@@ -40,6 +40,7 @@ export default function AdminDashboard() {
   const avatarInputRef = useRef<any>(null);
 
   const [userId, setUserId] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -88,25 +89,27 @@ export default function AdminDashboard() {
     try {
       // Fetch Products
       const { data: prods, error: prodErr } = await supabase.from('products').select('*').eq('user_id', user.id);
-      if (prods && !prodErr) setInventory(prods);
+      if (prods && !prodErr) setInventory(prev => prods.length === 0 && prev.length > 0 ? prev : prods);
 
       // Fetch Staff
       const { data: stf, error: stfErr } = await supabase.from('staff').select('*').eq('user_id', user.id);
-      if (stf && !stfErr) setStaff(stf);
+      if (stf && !stfErr) setStaff(prev => stf.length === 0 && prev.length > 0 ? prev : stf);
 
       // Fetch Expenses
       const { data: exp, error: expErr } = await supabase.from('expenses').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-      if (exp && !expErr) setExpenses(exp);
+      if (exp && !expErr) setExpenses(prev => exp.length === 0 && prev.length > 0 ? prev : exp);
 
       // Fetch Debtors
       const { data: dbt, error: dbtErr } = await supabase.from('debtors').select('*').eq('user_id', user.id);
-      if (dbt && !dbtErr) setDebtors(dbt);
+      if (dbt && !dbtErr) setDebtors(prev => dbt.length === 0 && prev.length > 0 ? prev : dbt);
 
       // Fetch Transactions
       const { data: trx, error: trxErr } = await supabase.from('transactions').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-      if (trx && !trxErr) setTransactions(trx);
+      if (trx && !trxErr) setTransactions(prev => trx.length === 0 && prev.length > 0 ? prev : trx);
     } catch (err) {
       console.log('Supabase load error:', err);
+    } finally {
+      setIsLoaded(true);
     }
   };
 
@@ -514,7 +517,7 @@ export default function AdminDashboard() {
 
 
   useEffect(() => {
-    if (Platform.OS === 'web' && userId) {
+    if (Platform.OS === 'web' && userId && isLoaded) {
       localStorage.setItem(`staff_${userId}`, JSON.stringify(staff));
       localStorage.setItem(`expenses_${userId}`, JSON.stringify(expenses));
       localStorage.setItem(`transactions_${userId}`, JSON.stringify(transactions));
@@ -1679,12 +1682,7 @@ export default function AdminDashboard() {
             <Text style={styles.subGreeting}>Xush kelibsiz! Tizim holati bilan tanishing</Text>
           </View>
           
-          <View style={styles.headerActions}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search-outline" size={20} color="#999" />
-              <TextInput placeholder="Qidirish..." style={styles.searchInput} />
-            </View>
-          </View>
+
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>

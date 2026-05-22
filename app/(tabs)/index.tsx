@@ -37,6 +37,8 @@ export default function PosScreen() {
   const [cart, setCart] = useState<any[]>([]);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSplitPaymentModal, setShowSplitPaymentModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const [splitCash, setSplitCash] = useState('');
   const [splitCard, setSplitCard] = useState('');
 
@@ -150,7 +152,7 @@ export default function PosScreen() {
         .order('name', { ascending: true });
       
       if (prodErr) throw prodErr;
-      if (prods) setProducts(prods);
+      if (prods) setProducts(prev => prods.length === 0 && prev.length > 0 ? prev : prods);
 
       // Fetch Debtors filtered by user_id
       const { data: dbt, error: dbtErr } = await supabase
@@ -160,7 +162,7 @@ export default function PosScreen() {
         .order('created_at', { ascending: false });
         
       if (dbtErr) throw dbtErr;
-      if (dbt) setDebtors(dbt);
+      if (dbt) setDebtors(prev => dbt.length === 0 && prev.length > 0 ? prev : dbt);
 
     } catch (err: any) {
       console.error('Supabase load error:', err);
@@ -170,7 +172,7 @@ export default function PosScreen() {
   };
 
   useEffect(() => {
-    if (Platform.OS === 'web' && userId) {
+    if (Platform.OS === 'web' && userId && !isLoading) {
       localStorage.setItem(`products_${userId}`, JSON.stringify(products));
       localStorage.setItem(`debtors_${userId}`, JSON.stringify(debtors));
       localStorage.setItem(`totalPaidAmount_${userId}`, totalPaidAmount.toString());
@@ -482,7 +484,8 @@ export default function PosScreen() {
     });
     setProducts(newProducts);
 
-    alert(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+    setSuccessMessage(`To'lov muvaffaqiyatli yakunlandi! Jami: ${total.toLocaleString()} so'm`);
+    setShowSuccessModal(true);
     setCart([]);
     setShowPaymentModal(false);
     setShowSplitPaymentModal(false);
@@ -980,6 +983,32 @@ export default function PosScreen() {
                 <Ionicons name="arrow-forward" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { alignItems: 'center', paddingVertical: 40 }]}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+              <Ionicons name="checkmark-circle" size={48} color="#28A745" />
+            </View>
+            <Text style={[styles.modalTitle, { textAlign: 'center', marginBottom: 10 }]}>Muvaffaqiyatli!</Text>
+            <Text style={{ fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 }}>
+              {successMessage}
+            </Text>
+            <TouchableOpacity 
+              style={[styles.saveBtn, { width: '80%', flex: 0 }]} 
+              onPress={() => setShowSuccessModal(false)}
+            >
+              <Text style={styles.saveBtnText}>Tushunarli</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

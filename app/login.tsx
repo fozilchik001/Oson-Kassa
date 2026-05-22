@@ -61,6 +61,7 @@ export default function LoginScreen() {
         // Persist for web if needed
         if (Platform.OS === 'web') {
           localStorage.setItem('isRegistered', 'true');
+          localStorage.setItem('adminPassword', password);
         }
         // Navigate to the main tabs screen
         router.replace('/(tabs)');
@@ -75,6 +76,7 @@ export default function LoginScreen() {
       // Save to localStorage for compatibility with existing logic
       if (Platform.OS === 'web') {
         localStorage.setItem('isRegistered', 'true');
+        localStorage.setItem('adminPassword', password);
         // Fetch profile if needed, but for now we'll just go to tabs
       }
 

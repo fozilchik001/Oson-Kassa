@@ -65,6 +65,7 @@ export default function RegisterScreen() {
       if (Platform.OS === 'web') {
         localStorage.setItem('shopName', shopName);
         localStorage.setItem('isRegistered', 'true');
+        localStorage.setItem('adminPassword', adminPassword);
       }
 
       router.replace('/(tabs)');

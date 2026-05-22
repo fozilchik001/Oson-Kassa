@@ -146,12 +146,7 @@ export default function SalesPage() {
             <Text style={styles.subGreeting}>Barcha amalga oshirilgan savdolar ro'yxati</Text>
           </View>
           
-          <View style={styles.headerActions}>
-            <View style={styles.searchBar}>
-              <Ionicons name="search-outline" size={20} color="#999" />
-              <TextInput placeholder="Qidirish..." style={styles.searchInput} />
-            </View>
-          </View>
+
         </View>
 
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
