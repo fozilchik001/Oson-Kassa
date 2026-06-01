@@ -257,6 +257,55 @@ export default function AdminDashboard() {
   const [prodImage, setProdImage] = useState<string | null>(null);
   const prodImageInputRef = useRef<any>(null);
 
+  // Barcode scanner listener when the product modal is open (Web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !showAddProdModal) return;
+
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+      const isShtrixInput = target && target.id === 'admin-shtrix-input';
+      const isOtherInputFocused = isInput && !isShtrixInput;
+
+      if (isOtherInputFocused) {
+        return; // Allow normal typing in name/price/stock
+      }
+
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
+          const code = buffer.trim();
+          buffer = '';
+          setProdCode(code);
+        }
+        return;
+      }
+
+      if (timeDiff > 50) {
+        buffer = '';
+      }
+
+      if (e.key.length === 1) {
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [showAddProdModal]);
+
   const handlePickProdImage = () => {
     if (Platform.OS === 'web') {
       if (prodImageInputRef.current) {
@@ -938,6 +987,7 @@ export default function AdminDashboard() {
 
             <Text style={styles.fieldLabel}>Shtrix kod</Text>
             <TextInput
+              nativeID="admin-shtrix-input"
               style={styles.modalInput}
               placeholder="123456789"
               value={prodCode}
@@ -1245,7 +1295,7 @@ export default function AdminDashboard() {
           <Text style={[styles.td, { flex: 1, color: '#999' }]}>#{t.id}</Text>
           <Text style={[styles.td, { flex: 1.5, fontWeight: '600' }]}>{t.customer}</Text>
           <Text style={[styles.td, { flex: 1 }]}>{t.time}</Text>
-          <View style={[styles.td, { flex: 1 }]}>
+          <View style={{ flex: 1 }}>
              <View style={[styles.badge, t.method === 'Naqd' ? styles.badgeSuccess : styles.badgeInfo]}>
                 <Text style={[styles.badgeText, t.method === 'Naqd' ? styles.badgeSuccessText : styles.badgeInfoText]}>
                   {t.method}
@@ -1577,7 +1627,7 @@ export default function AdminDashboard() {
 
           return (
             <View key={debtor.id} style={styles.tr}>
-              <View style={[styles.td, { flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+              <View style={{ flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <View style={styles.miniAvatar}>
                   <Text style={styles.miniAvatarText}>{debtor.name.charAt(0)}</Text>
                 </View>
@@ -1587,14 +1637,14 @@ export default function AdminDashboard() {
               <Text style={[styles.td, { flex: 2, fontWeight: 'bold', color: '#E31E24' }]}>
                 {debtor.amount.toLocaleString()} so'm
               </Text>
-              <View style={[styles.td, { flex: 1.5, flexDirection: 'row', justifyContent: 'center' }]}>
+              <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center' }}>
                  <View style={[styles.badge, isOver ? {backgroundColor: '#FFEBEE'} : styles.badgeWarning]}>
                     <Text style={[styles.badgeText, isOver ? {color: '#C62828'} : styles.badgeWarningText]}>
                       {debtor.date}
                     </Text>
                  </View>
               </View>
-              <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+              <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }}>
                 <TouchableOpacity
                   style={styles.payDebtBtn}
                   onPress={() => openPayDebtModal(debtor)}
@@ -2847,5 +2897,34 @@ const styles = StyleSheet.create({
   },
   filterBtnGreenTextActive: {
     color: '#fff',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  statLabel: {
+    fontSize: 13,
+    color: '#666',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+  },
+  payDebtBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#28A745',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 5,
+  },
+  payDebtBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

@@ -427,22 +427,96 @@ export default function PosScreen() {
     });
   }, [products, selectedCategory, searchQuery]);
 
+  // Toast state and helper
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToast({ message, type });
+  };
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  // Barcode scanner global keydown listener (Web only)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    let buffer = '';
+    let lastKeyTime = Date.now();
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+      const isSearchInput = target && target.id === 'pos-search-input';
+      const isOtherInputFocused = isInput && !isSearchInput;
+
+      if (isOtherInputFocused) {
+        return;
+      }
+
+      const currentTime = Date.now();
+      const timeDiff = currentTime - lastKeyTime;
+      lastKeyTime = currentTime;
+
+      if (e.key === 'Enter') {
+        if (buffer.length >= 3) {
+          e.preventDefault();
+          e.stopPropagation();
+          const code = buffer.trim();
+          buffer = '';
+
+          const foundProduct = products.find(p => p.code && p.code.trim() === code);
+          if (foundProduct) {
+            addToCart(foundProduct);
+            if (isSearchInput) {
+              setSearchQuery('');
+            }
+          } else {
+            showToast(`Mahsulot topilmadi: ${code}`, 'error');
+          }
+        }
+        return;
+      }
+
+      if (timeDiff > 50) {
+        buffer = '';
+      }
+
+      if (e.key.length === 1) {
+        buffer += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [products]);
+
   const addToCart = (product: any) => {
     if (product.stock <= 0) {
-      alert('Mahsulot omborda qolmagan!');
+      showToast('Mahsulot omborda qolmagan!', 'error');
       return;
     }
     setCart((prev) => {
       const existing = prev.find((item) => item.id === product.id);
       if (existing) {
         if (existing.quantity >= product.stock) {
-          alert(`Omborda faqat ${product.stock} ta mahsulot bor!`);
+          showToast(`Omborda faqat ${product.stock} ta mahsulot bor!`, 'error');
           return prev;
         }
+        showToast(`${product.name} savatga qo'shildi`, 'success');
         return prev.map((item) =>
           item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
+      showToast(`${product.name} savatga qo'shildi`, 'success');
       return [...prev, { ...product, quantity: 1 }];
     });
   };
@@ -600,6 +674,7 @@ export default function PosScreen() {
                 <View style={styles.searchContainer}>
                   <Ionicons name="search-outline" size={20} color="#999" />
                   <TextInput
+                    nativeID="pos-search-input"
                     style={styles.searchInput}
                     placeholder="Mahsulot qidirish..."
                     value={searchQuery}
@@ -900,7 +975,7 @@ export default function PosScreen() {
 
                   return (
                     <View key={debtor.id} style={styles.tr}>
-                      <View style={[styles.td, { flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                      <View style={{ flex: 2.5, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                         <View style={styles.userAvatar}>
                           <Text style={styles.userAvatarText}>{debtor.name.charAt(0)}</Text>
                         </View>
@@ -910,14 +985,14 @@ export default function PosScreen() {
                       <Text style={[styles.td, { flex: 2, fontWeight: 'bold', color: '#E31E24' }]}>
                         {debtor.amount.toLocaleString()} so'm
                       </Text>
-                      <View style={[styles.td, { flex: 1.5, flexDirection: 'row', justifyContent: 'center' }]}>
+                      <View style={{ flex: 1.5, flexDirection: 'row', justifyContent: 'center' }}>
                          <View style={[styles.badge, isOver ? styles.badgeDanger : styles.badgeWarning]}>
                             <Text style={[styles.badgeText, isOver ? styles.badgeDangerText : styles.badgeWarningText]}>
                               {debtor.date}
                             </Text>
                          </View>
                       </View>
-                      <View style={[styles.td, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
+                      <View style={{ flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }}>
                         <TouchableOpacity
                           style={styles.payDebtBtn}
                           onPress={() => openPayDebtModal(debtor)}
@@ -1364,6 +1439,20 @@ export default function PosScreen() {
         </View>
       </Modal>
 
+      {toast && (
+        <View style={[
+          styles.toastContainer, 
+          toast.type === 'success' ? styles.toastSuccess : 
+          toast.type === 'error' ? styles.toastError : styles.toastInfo
+        ]}>
+          <Ionicons 
+            name={toast.type === 'success' ? 'checkmark-circle' : toast.type === 'error' ? 'alert-circle' : 'information-circle'} 
+            size={20} 
+            color="#fff" 
+          />
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      )}
 
     </View>
 
@@ -2343,6 +2432,42 @@ const styles = StyleSheet.create({
   payDebtRemainingText: {
     fontSize: 13,
     color: '#F57F17',
+    fontWeight: '600',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 40,
+    right: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#333',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+    zIndex: 9999,
+  },
+  toastSuccess: {
+    backgroundColor: '#2E7D32',
+  },
+  toastError: {
+    backgroundColor: '#C62828',
+  },
+  toastInfo: {
+    backgroundColor: '#0277BD',
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  badgeText: {
+    fontSize: 12,
     fontWeight: '600',
   },
 });
